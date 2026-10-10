@@ -4,7 +4,7 @@
 
 **a. Initial design**
 
-**Three Core Actions**
+Three Core Actions:
 1. Add owner and Pet information
 2. Add/Edit tasks (duriation, name of task, category, priority)
 3. Scheduling: Display a daily schedule/plan based on constraints (filters) and priorities.

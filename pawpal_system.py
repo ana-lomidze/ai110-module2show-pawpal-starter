@@ -92,10 +92,7 @@ class Owner:
     def add_pet(self, name: str, pet_type: str, age: int) -> Pet:
         pass
 
-    def get_pet(self, name: str) -> Optional[Pet]:
-        pass
-
-    def get_pet_names(self) -> List[str]:
+    def get_pet_names(self) -> List[Pet]:
         pass
 
 
