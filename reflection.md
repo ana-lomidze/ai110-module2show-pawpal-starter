@@ -4,6 +4,11 @@
 
 **a. Initial design**
 
+**Three Core Actions**
+    - Add owner and Pet information
+    - Add/Edit tasks (duriation, name of task, category, priority)
+    - Scheduling: Display a daily schedule/plan based on constraints (filters) and priorities.
+
 - Briefly describe your initial UML design.
 - What classes did you include, and what responsibilities did you assign to each?
 

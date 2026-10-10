@@ -1,0 +1,57 @@
+classDiagram
+    class Owner {
+        +str name
+        +List~Pet~ pets
+        +add_pet(name, pet_type, age) Pet
+        +get_pet(name) Pet
+        +get_pet_names() List~str~
+    }
+
+    class Pet {
+        +str name
+        +str pet_type
+        +int age
+        +Schedule schedule
+        +edit_info(name, pet_type, age) void
+    }
+
+    class Schedule {
+        +List~Task~ tasks
+        +add_task(task) void
+        +edit_task(task, updates) void
+        +remove_task(task) void
+        +get_tasks() List~Task~
+        +filter_tasks(name, category, priority, duration, completed, date) List~Task~
+        +daily_display(date) void
+        +weekly_display(start_date) void
+        +monthly_display(month, year) void
+    }
+
+    class Task {
+        +str name
+        +str category
+        +date date
+        +time start_time
+        +time end_time
+        +int priority
+        +str comment
+        +str recurrence
+        +bool completed
+        +List~str~ CATEGORIES$
+        +add_category(name)$ void
+        +get_duration() float
+        +occurs_on(date) bool
+        +mark_complete() void
+    }
+
+    class Scheduler {
+        +Schedule schedule
+        +daily_plan(date) List~Task~
+        +sort_tasks(by) List~Task~
+        +find_conflicts() List~Task~
+    }
+
+    Owner "1" *-- "0..*" Pet : owns
+    Pet "1" *-- "1" Schedule : has
+    Schedule "1" o-- "0..*" Task : contains
+    Scheduler "1" --> "1" Schedule : plans for
