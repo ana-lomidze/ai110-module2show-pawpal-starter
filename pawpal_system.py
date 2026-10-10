@@ -25,10 +25,6 @@ class Task:
 
     CATEGORIES: ClassVar[List[str]] = ["walk", "feeding", "meds", "enrichment", "grooming"]
 
-    @classmethod
-    def add_category(cls, name: str) -> None:
-        pass
-
     def get_duration(self) -> float:
         pass
 
