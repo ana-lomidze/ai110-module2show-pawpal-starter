@@ -1,4 +1,10 @@
 classDiagram
+    class PawPal {
+        +List~Owner~ owners
+        +add_owner(name) Owner
+        +get_owners() List~Owner~
+    }
+
     class Owner {
         +str name
         +List~Pet~ pets
@@ -10,6 +16,7 @@ classDiagram
         +str name
         +str pet_type
         +int age
+        +Owner owner
         +Schedule schedule
         +edit_info(name, pet_type, age) void
     }
@@ -50,6 +57,7 @@ classDiagram
         +find_conflicts() List~Task~
     }
 
+    PawPal "1" *-- "0..*" Owner : contains
     Owner "1" *-- "0..*" Pet : owns
     Pet "1" *-- "1" Schedule : has
     Schedule "1" o-- "0..*" Task : contains

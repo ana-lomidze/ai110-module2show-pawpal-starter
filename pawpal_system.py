@@ -1,11 +1,14 @@
 """
-PawPal+ logic layer: 
-core classes for owners, pets, tasks, and scheduling.
+PawPal+ logic layer:
+core classes for the app (PawPal), owners, pets, schedules, tasks, and scheduling.
 """
 
 from dataclasses import dataclass, field
 from datetime import date, time
 from typing import ClassVar, List, Optional
+
+# Private token: Owners may only be created through PawPal.add_owner()
+_OWNER_TOKEN = object()
 
 
 @dataclass
@@ -78,6 +81,7 @@ class Pet:
     name: str
     pet_type: str
     age: int
+    owner: "Owner" = field(repr=False, compare=False)
     schedule: Schedule = field(default_factory=Schedule)
 
     def edit_info(self, name: str, pet_type: str, age: int) -> None:
@@ -85,7 +89,9 @@ class Pet:
 
 
 class Owner:
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, _token: object = None) -> None:
+        if _token is not _OWNER_TOKEN:
+            raise TypeError("Owners must be created with PawPal.add_owner()")
         self.name: str = name
         self.pets: List[Pet] = []
 
@@ -93,6 +99,17 @@ class Owner:
         pass
 
     def get_pet_names(self) -> List[Pet]:
+        pass
+
+
+class PawPal:
+    def __init__(self) -> None:
+        self.owners: List[Owner] = []
+
+    def add_owner(self, name: str) -> Owner:
+        pass
+
+    def get_owners(self) -> List[Owner]:
         pass
 
 
