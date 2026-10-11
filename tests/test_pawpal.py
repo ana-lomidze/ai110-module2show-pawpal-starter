@@ -64,6 +64,27 @@ def test_completing_recurring_task_creates_next_occurrence():
     assert len(pet.get_tasks()) == 2
 
 
+def test_mark_complete_directly_creates_next_occurrence():
+    pet = make_pet()
+    task = make_task(recurrence="daily")
+    pet.add_task(task)
+
+    follow_up = task.mark_complete()
+
+    assert follow_up is not None
+    assert follow_up.date == date(2026, 10, 12)
+    assert len(pet.get_tasks()) == 2
+    assert task.mark_complete() is None  # no duplicate
+    assert len(pet.get_tasks()) == 2
+
+
+def test_mark_complete_on_task_without_pet_creates_nothing():
+    task = make_task(recurrence="daily")
+
+    assert task.mark_complete() is None
+    assert task.is_complete() is True
+
+
 def test_completing_non_recurring_task_creates_nothing():
     pet = make_pet()
     task = make_task()

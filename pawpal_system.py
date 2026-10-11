@@ -72,12 +72,32 @@ class Task:
         """Return True if the task has been completed on the given date (default: its own date)."""
         return (on or self.date) in self.completed_dates
 
-    def mark_complete(self, on: Optional[date] = None) -> None:
-        """Mark the task complete for the given date (default: its own date)."""
+    def mark_complete(self, on: Optional[date] = None) -> Optional["Task"]:
+        """Mark the task complete for the given date (default: its own date).
+
+        If the task repeats and belongs to a pet, the next occurrence is added to that
+        pet's schedule and returned. Returns None when nothing new is created.
+        """
         on = on or self.date
         if not self.occurs_on(on):
             raise ValueError(f"Task does not occur on {on}")
         self.completed_dates.add(on)
+
+        next_date = self.next_date()
+        if next_date is None or self.pet is None:
+            return None
+        already_exists = any(
+            t.date == next_date and t.name == self.name and t.start_time == self.start_time
+            for t in self.pet.schedule.tasks
+        )
+        if already_exists:  # completing twice must not spawn twice
+            return None
+        follow_up = Task(
+            self.name, self.category, next_date, self.start_time,
+            self.end_time, self.priority, self.comment, self.recurrence,
+        )
+        self.pet.add_task(follow_up)
+        return follow_up
 
 
 class Schedule:
@@ -123,23 +143,7 @@ class Schedule:
 
     def complete_task(self, task: Task, on: Optional[date] = None) -> Optional[Task]:
         """Mark a task complete and, if it repeats, add the next occurrence; return the new task."""
-        stored = self.get_task(task)
-        stored.mark_complete(on)
-        next_date = stored.next_date()
-        if next_date is None:
-            return None
-        already_exists = any(
-            t.date == next_date and t.name == stored.name and t.start_time == stored.start_time
-            for t in self.tasks
-        )
-        if already_exists:  # completing twice must not spawn twice
-            return None
-        follow_up = Task(
-            stored.name, stored.category, next_date, stored.start_time,
-            stored.end_time, stored.priority, stored.comment, stored.recurrence,
-        )
-        self.add_task(follow_up)
-        return follow_up
+        return self.get_task(task).mark_complete(on)
 
     def remove_task(self, task: Task) -> None:
         """Remove a task from the schedule and unlink it from the pet."""
@@ -341,7 +345,22 @@ class Scheduler:
         tasks = self.sort_tasks(date, "time")
         return [(a, b) for a, b in combinations(tasks, 2) if self._overlaps(a, b)]
 
+    @staticmethod
+    def _busy_minutes(tasks: List[Task]) -> float:
+        """Return total minutes covered by the tasks, counting overlapping time once."""
+        busy = 0.0
+        block_end = None  # end of the merged block we're currently extending
+        for t in sorted(tasks, key=lambda t: t.start_time):
+            if block_end is None or t.start_time >= block_end:  # starts a new block
+                busy += t.get_duration()
+                block_end = t.end_time
+            elif t.end_time > block_end:  # extends the current block
+                gap = datetime.combine(t.date, t.end_time) - datetime.combine(t.date, block_end)
+                busy += gap.total_seconds() / 60
+                block_end = t.end_time
+            # otherwise fully inside the current block: adds nothing
+        return busy
+
     def remaining_minutes(self, date: date) -> float:
-        """Return the owner's available minutes minus scheduled minutes (negative if overbooked)."""
-        used = sum(t.get_duration() for t in self._tasks_on(date))
-        return self.owner.daily_available_minutes - used
+        """Return available minutes minus scheduled minutes (overlaps counted once; negative if overbooked)."""
+        return self.owner.daily_available_minutes - self._busy_minutes(self._tasks_on(date))
