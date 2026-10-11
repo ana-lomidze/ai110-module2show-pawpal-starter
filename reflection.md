@@ -25,6 +25,7 @@ Classes Used:
 
 - Did your design change during implementation?
 - If yes, describe at least one change and why you made it.
+
 My design changed while I turned the UML into Python stubs and reviewed the class relationships. The biggest change was adding a top-level PawPal class that holds all owners, so owners are created through PawPal.add_owner() instead of directly. I also changed Scheduler to plan for an Owner instead of a single Schedule. The first version could only plan for one pet, but a real owner has several pets and needs one daily plan across all of them. To support that, I gave Task, Schedule and Pet back-references to their pet and owner. I also added a unique id to Task, so editing or removing a task can't hit a different task with identical details.
 
 ---
