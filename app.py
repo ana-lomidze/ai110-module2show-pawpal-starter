@@ -1,4 +1,4 @@
-from datetime import date, time
+from datetime import date
 
 import streamlit as st
 from pawpal_system import PawPal, Owner, Pet, Task, Schedule, Scheduler
@@ -41,27 +41,39 @@ At minimum, your system should:
 
 st.divider()
 
-st.subheader("Owner & Pets")
-owner_name = st.text_input("Owner name", value="Jordan")
-pet_name = st.text_input("Pet name", value="Mochi")
-species = st.selectbox("Species", ["dog", "cat", "other"])
-age = st.number_input("Age", min_value=0, max_value=40, value=1)
-
 # Session "vault": Streamlit re-runs this script on every interaction, so the
 # PawPal and Owner are only created if they are not already stored.
 if "pawpal" not in st.session_state:
     st.session_state.pawpal = PawPal()
 
+st.subheader("Owner & Pets")
+
 if "owner" not in st.session_state:
-    st.session_state.owner = st.session_state.pawpal.add_owner(owner_name)
+    owner_name = st.text_input("Owner name", key="owner_name_input")
+    if st.button("Create owner"):
+        try:
+            st.session_state.owner = st.session_state.pawpal.add_owner(owner_name)
+            st.rerun()
+        except ValueError as e:
+            st.error(str(e))
+    st.info("Create an owner to start adding pets and tasks.")
+    st.stop()
 
 owner = st.session_state.owner
+st.write(f"Owner: **{owner.name}**")
+
+pet_name = st.text_input("Pet name", key="pet_name_input")
+species = st.selectbox("Species", ["dog", "cat", "other"])
+age = st.number_input("Age", min_value=0, max_value=40, value=None, step=1)
 
 if st.button("Add pet"):
-    try:
-        owner.add_pet(pet_name, species, int(age))
-    except ValueError as e:
-        st.error(str(e))
+    if age is None:
+        st.error("Enter the pet's age.")
+    else:
+        try:
+            owner.add_pet(pet_name, species, int(age))
+        except ValueError as e:
+            st.error(str(e))
 
 if owner.get_pets():
     st.write(f"{owner.name}'s pets:")
@@ -85,12 +97,12 @@ else:
 
     col1, col2 = st.columns(2)
     with col1:
-        task_title = st.text_input("Task title", value="Morning walk")
+        task_title = st.text_input("Task title")
         category = st.selectbox("Category", Task.CATEGORIES)
         task_date = st.date_input("Date", value=date.today())
     with col2:
-        start_time = st.time_input("Start time", value=time(8, 0))
-        end_time = st.time_input("End time", value=time(8, 30))
+        start_time = st.time_input("Start time", value=None)
+        end_time = st.time_input("End time", value=None)
         priority = st.slider(
             "Priority (5 = most important)", Task.MIN_PRIORITY, Task.MAX_PRIORITY, 3
         )
@@ -99,21 +111,24 @@ else:
     comment = st.text_input("Note (optional)")
 
     if st.button("Add task"):
-        try:
-            pets_by_name[task_pet_name].add_task(
-                Task(
-                    task_title,
-                    category,
-                    task_date,
-                    start_time,
-                    end_time,
-                    priority,
-                    comment,
-                    recurrence,
+        if start_time is None or end_time is None:
+            st.error("Enter a start time and an end time.")
+        else:
+            try:
+                pets_by_name[task_pet_name].add_task(
+                    Task(
+                        task_title,
+                        category,
+                        task_date,
+                        start_time,
+                        end_time,
+                        priority,
+                        comment,
+                        recurrence,
+                    )
                 )
-            )
-        except ValueError as e:
-            st.error(str(e))
+            except ValueError as e:
+                st.error(str(e))
 
 all_tasks = sorted(owner.get_all_tasks(), key=lambda t: (t.date, t.start_time))
 if all_tasks:
@@ -146,6 +161,20 @@ with filter_col1:
 with filter_col2:
     status_choice = st.selectbox("Show status", ["All", "Pending", "Done"], key="status_filter")
 
+
+def complete_task(task: Task, on: date) -> None:
+    """Button callback: mark the task done and note any follow-up that was created."""
+    follow_up = task.mark_complete(on)
+    if follow_up:
+        st.session_state.notice = (
+            f"Next '{follow_up.name}' ({follow_up.pet.name}) created for "
+            f"{follow_up.date.strftime('%a, %b %d')}."
+        )
+
+
+if "notice" in st.session_state:
+    st.toast(st.session_state.pop("notice"))
+
 scheduler = Scheduler(owner)
 day_plan = scheduler.daily_plan(plan_date)
 plan = scheduler.filter_tasks(
@@ -159,20 +188,27 @@ if not day_plan:
 else:
     st.write(f"Schedule for {plan_date.strftime('%A, %B %d, %Y')}:")
     if plan:
-        st.table(
-            [
-                {
-                    "Status": "Done" if t.is_complete(plan_date) else "Not done",
-                    "Time": f"{t.start_time:%I:%M %p} - {t.end_time:%I:%M %p}",
-                    "Task": t.name,
-                    "Pet": t.pet.name,
-                    "Category": t.category,
-                    "Priority": t.priority,
-                    "Note": t.comment,
-                }
-                for t in plan
-            ]
-        )
+        widths = [1.6, 2.3, 2.3, 1.6, 1.6, 0.9]
+        for col, label in zip(st.columns(widths), ["Status", "Time", "Task", "Pet", "Category", "Priority"]):
+            col.markdown(f"**{label}**")
+        for t in plan:
+            status_col, time_col, task_col, pet_col, category_col, priority_col = st.columns(widths)
+            if t.is_complete(plan_date):
+                status_col.write("Done ✓")
+            else:
+                status_col.button(
+                    "Mark done",
+                    key=f"done_{t.id}",
+                    on_click=complete_task,
+                    args=(t, plan_date),
+                )
+            time_col.write(f"{t.start_time:%I:%M %p} - {t.end_time:%I:%M %p}")
+            task_col.write(t.name)
+            if t.comment:
+                task_col.caption(t.comment)
+            pet_col.write(t.pet.name)
+            category_col.write(t.category)
+            priority_col.write(t.priority)
     else:
         st.info("No tasks match the selected filters.")
 
