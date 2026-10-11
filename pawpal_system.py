@@ -340,6 +340,30 @@ class Scheduler:
             raise ValueError(f"Sort by must be one of {list(keys)}")
         return sorted(self._tasks_on(date), key=keys[by])
 
+    def filter_tasks(
+        self,
+        date: date,
+        pet_name: Optional[str] = None,
+        status: Optional[str] = None,
+        category: Optional[str] = None,
+    ) -> List[Task]:
+        """Return the day's tasks in time order, filtered by pet name, status and category.
+
+        status is "done", "pending" or None; completion is checked for this date only.
+        """
+        if status not in (None, "done", "pending"):
+            raise ValueError("Status must be 'done', 'pending' or None")
+        results: List[Task] = []
+        for t in self.sort_tasks(date, "time"):
+            if pet_name is not None and t.pet.name != pet_name:
+                continue
+            if category is not None and t.category != category:
+                continue
+            if status is not None and t.is_complete(date) != (status == "done"):
+                continue
+            results.append(t)
+        return results
+
     def find_conflicts(self, date: date) -> List[Tuple[Task, Task]]:
         """Return every pair of overlapping tasks on the date, across all pets."""
         tasks = self.sort_tasks(date, "time")

@@ -140,14 +140,25 @@ st.divider()
 st.subheader("Build Schedule")
 plan_date = st.date_input("Schedule for", value=date.today(), key="plan_date")
 
-if st.button("Generate schedule"):
-    scheduler = Scheduler(owner)
-    plan = scheduler.daily_plan(plan_date)
+filter_col1, filter_col2 = st.columns(2)
+with filter_col1:
+    pet_choice = st.selectbox("Show pet", ["All pets"] + list(pets_by_name), key="pet_filter")
+with filter_col2:
+    status_choice = st.selectbox("Show status", ["All", "Pending", "Done"], key="status_filter")
 
-    if not plan:
-        st.info(f"No tasks scheduled for {plan_date.strftime('%A, %B %d, %Y')}.")
-    else:
-        st.write(f"Schedule for {plan_date.strftime('%A, %B %d, %Y')}:")
+scheduler = Scheduler(owner)
+day_plan = scheduler.daily_plan(plan_date)
+plan = scheduler.filter_tasks(
+    plan_date,
+    pet_name=None if pet_choice == "All pets" else pet_choice,
+    status=None if status_choice == "All" else status_choice.lower(),
+)
+
+if not day_plan:
+    st.info(f"No tasks scheduled for {plan_date.strftime('%A, %B %d, %Y')}.")
+else:
+    st.write(f"Schedule for {plan_date.strftime('%A, %B %d, %Y')}:")
+    if plan:
         st.table(
             [
                 {
@@ -162,12 +173,15 @@ if st.button("Generate schedule"):
                 for t in plan
             ]
         )
+    else:
+        st.info("No tasks match the selected filters.")
 
-        remaining = scheduler.remaining_minutes(plan_date)
-        if remaining < 0:
-            st.warning(f"Overbooked by {-remaining:.0f} minutes.")
-        else:
-            st.success(f"{remaining:.0f} of {owner.daily_available_minutes} minutes remaining.")
+    # Time left and conflicts always describe the whole day, not the filtered view.
+    remaining = scheduler.remaining_minutes(plan_date)
+    if remaining < 0:
+        st.warning(f"Overbooked by {-remaining:.0f} minutes.")
+    else:
+        st.success(f"{remaining:.0f} of {owner.daily_available_minutes} minutes remaining.")
 
-        for a, b in scheduler.find_conflicts(plan_date):
-            st.warning(f"'{a.name}' ({a.pet.name}) overlaps '{b.name}' ({b.pet.name}).")
+    for a, b in scheduler.find_conflicts(plan_date):
+        st.warning(f"'{a.name}' ({a.pet.name}) overlaps '{b.name}' ({b.pet.name}).")
