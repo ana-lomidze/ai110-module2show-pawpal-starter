@@ -8,6 +8,8 @@ classDiagram
     class Owner {
         +str name
         +List~Pet~ pets
+        +int daily_available_minutes
+        +List~str~ preferences
         +add_pet(name, pet_type, age) Pet
         +get_pet_names() List~Pet~
     }
@@ -22,18 +24,20 @@ classDiagram
     }
 
     class Schedule {
+        +Pet pet
         +List~Task~ tasks
         +add_task(task) void
         +edit_task(task, updates) void
         +remove_task(task) void
         +get_tasks() List~Task~
         +filter_tasks(name, category, priority, duration, completed, date) List~Task~
-        +daily_display(date) void
-        +weekly_display(start_date) void
-        +monthly_display(month, year) void
+        +daily_display(date) List~Task~
+        +weekly_display(start_date) List~Task~
+        +monthly_display(month, year) List~Task~
     }
 
     class Task {
+        +str id
         +str name
         +str category
         +date date
@@ -43,6 +47,7 @@ classDiagram
         +str comment
         +str recurrence
         +bool completed
+        +Pet pet
         +List~str~ CATEGORIES$
         +get_duration() float
         +occurs_on(date) bool
@@ -50,14 +55,18 @@ classDiagram
     }
 
     class Scheduler {
-        +Schedule schedule
+        +Owner owner
         +daily_plan(date) List~Task~
-        +sort_tasks(by) List~Task~
-        +find_conflicts() List~Task~
+        +sort_tasks(date, by) List~Task~
+        +find_conflicts(date) List~Tuple~Task, Task~~
+        +remaining_minutes(date) float
     }
 
     PawPal "1" *-- "0..*" Owner : contains
     Owner "1" *-- "0..*" Pet : owns
+    Pet "0..*" --> "1" Owner : belongs to
     Pet "1" *-- "1" Schedule : has
+    Schedule "1" --> "1" Pet : for
     Schedule "1" o-- "0..*" Task : contains
-    Scheduler "1" --> "1" Schedule : plans for
+    Task "0..*" --> "1" Pet : for
+    Scheduler "1" --> "1" Owner : plans for

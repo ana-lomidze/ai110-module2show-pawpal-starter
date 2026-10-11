@@ -12,10 +12,20 @@ Three Core Actions:
 - Briefly describe your initial UML design.
 - What classes did you include, and what responsibilities did you assign to each?
 
+Classes Used:
+1. PawPal: Stores the list of owners. Responsibilities include adding an owner and fetching the list of owners.
+2. Owner: Stores the name of owner, and list of their pets. Responsibilities include adding a pet, getting the list of the owner's pets.
+3. Pet: Stores the pet's name, type, age, owner, and schedule. Responsibilities include editing the information capabilities.
+4. Schedule: Stores the list of tasks. Responsibilities include adding, editing, and removing a task. It also fetches a list of tasks, has a filter for task name, category, priority, duration, completed, and/or date. Also includes a daily, weekly, and monthly display.
+5. Task: Stores the name, category, date, start and end time, priority, and comment of a task. It also keeps track if the task has been completed and if the task is repeated (the recurrance). Responsibilities include getting the duration of the task, getting the date of the task, and marking the task as complete.
+6. Scheduler: Stores the schedule. Responsibilities include compiling the daily plan, sorting the tasks, and finding conflicts.
+
+
 **b. Design changes**
 
 - Did your design change during implementation?
 - If yes, describe at least one change and why you made it.
+My design changed while I turned the UML into Python stubs and reviewed the class relationships. The biggest change was adding a top-level PawPal class that holds all owners, so owners are created through PawPal.add_owner() instead of directly. I also changed Scheduler to plan for an Owner instead of a single Schedule. The first version could only plan for one pet, but a real owner has several pets and needs one daily plan across all of them. To support that, I gave Task, Schedule and Pet back-references to their pet and owner. I also added a unique id to Task, so editing or removing a task can't hit a different task with identical details.
 
 ---
 

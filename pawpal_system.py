@@ -5,7 +5,8 @@ core classes for the app (PawPal), owners, pets, schedules, tasks, and schedulin
 
 from dataclasses import dataclass, field
 from datetime import date, time
-from typing import ClassVar, List, Optional
+from typing import ClassVar, List, Optional, Tuple
+from uuid import uuid4
 
 # Private token: Owners may only be created through PawPal.add_owner()
 _OWNER_TOKEN = object()
@@ -22,6 +23,8 @@ class Task:
     comment: str = ""
     recurrence: str = "none"
     completed: bool = False
+    id: str = field(default_factory=lambda: uuid4().hex)
+    pet: Optional["Pet"] = field(default=None, repr=False, compare=False)
 
     CATEGORIES: ClassVar[List[str]] = ["walk", "feeding", "meds", "enrichment", "grooming"]
 
@@ -36,7 +39,8 @@ class Task:
 
 
 class Schedule:
-    def __init__(self) -> None:
+    def __init__(self, pet: "Pet") -> None:
+        self.pet: Pet = pet
         self.tasks: List[Task] = []
 
     def add_task(self, task: Task) -> None:
@@ -62,13 +66,13 @@ class Schedule:
     ) -> List[Task]:
         pass
 
-    def daily_display(self, date: date) -> None:
+    def daily_display(self, date: date) -> List[Task]:
         pass
 
-    def weekly_display(self, start_date: date) -> None:
+    def weekly_display(self, start_date: date) -> List[Task]:
         pass
 
-    def monthly_display(self, month: int, year: int) -> None:
+    def monthly_display(self, month: int, year: int) -> List[Task]:
         pass
 
 
@@ -78,18 +82,29 @@ class Pet:
     pet_type: str
     age: int
     owner: "Owner" = field(repr=False, compare=False)
-    schedule: Schedule = field(default_factory=Schedule)
+    schedule: Schedule = field(init=False, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        self.schedule = Schedule(self)
 
     def edit_info(self, name: str, pet_type: str, age: int) -> None:
         pass
 
 
 class Owner:
-    def __init__(self, name: str, _token: object = None) -> None:
+    def __init__(
+        self,
+        name: str,
+        daily_available_minutes: int = 480,
+        preferences: Optional[List[str]] = None,
+        _token: object = None,
+    ) -> None:
         if _token is not _OWNER_TOKEN:
             raise TypeError("Owners must be created with PawPal.add_owner()")
         self.name: str = name
         self.pets: List[Pet] = []
+        self.daily_available_minutes: int = daily_available_minutes
+        self.preferences: List[str] = preferences if preferences is not None else []
 
     def add_pet(self, name: str, pet_type: str, age: int) -> Pet:
         pass
@@ -110,14 +125,17 @@ class PawPal:
 
 
 class Scheduler:
-    def __init__(self, schedule: Schedule) -> None:
-        self.schedule: Schedule = schedule
+    def __init__(self, owner: Owner) -> None:
+        self.owner: Owner = owner
 
     def daily_plan(self, date: date) -> List[Task]:
         pass
 
-    def sort_tasks(self, by: str) -> List[Task]:
+    def sort_tasks(self, date: date, by: str) -> List[Task]:
         pass
 
-    def find_conflicts(self) -> List[Task]:
+    def find_conflicts(self, date: date) -> List[Tuple[Task, Task]]:
+        pass
+
+    def remaining_minutes(self, date: date) -> float:
         pass
