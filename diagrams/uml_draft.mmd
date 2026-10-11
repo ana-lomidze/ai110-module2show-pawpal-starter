@@ -29,18 +29,16 @@ classDiagram
     }
 
     class Schedule {
-        +Set~str~ EDITABLE_FIELDS$
         +Pet pet
         +List~Task~ tasks
-        +get_task(task) Task
         +add_task(task) void
         +edit_task(task, updates) void
         +remove_task(task) void
         +get_tasks() List~Task~
         +filter_tasks(name, category, priority, duration, completed, date) List~Task~
         +daily_display(date) List~Task~
-        +weekly_display(start_date) Dict~date, List~Task~~
-        +monthly_display(month, year) Dict~date, List~Task~~
+        +weekly_display(start_date) List~Task~
+        +monthly_display(month, year) List~Task~
     }
 
     class Task {
@@ -53,17 +51,12 @@ classDiagram
         +int priority
         +str comment
         +str recurrence
-        +Set~date~ completed_dates
+        +bool completed
         +Pet pet
         +List~str~ CATEGORIES$
-        +List~str~ RECURRENCES$
-        +int MIN_PRIORITY$
-        +int MAX_PRIORITY$
-        +validate() void
         +get_duration() float
         +occurs_on(date) bool
-        +is_complete(on) bool
-        +mark_complete(on) void
+        +mark_complete() void
     }
 
     class Scheduler {

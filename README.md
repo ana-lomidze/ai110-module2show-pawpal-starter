@@ -42,6 +42,36 @@ pip install -r requirements.txt
 6. Connect your logic to the Streamlit UI in `app.py`.
 7. Refine UML so it matches what you actually built.
 
+## Implementation Summary
+
+PawPal+'s logic lives in `pawpal_system.py` as six classes. Data flows down the chain
+`PawPal → Owner → Pet → Schedule → Task`, and a separate `Scheduler` reads across it.
+
+| Class | Role |
+|-------|------|
+| `PawPal` | Top-level registry of owners. It is the only way to create an `Owner`, and it rejects blank or duplicate names. |
+| `Owner` | Holds the owner's pets, daily available minutes and preferences. `get_all_tasks()` collects the tasks of every pet, so the rest of the app never reads a single pet directly. |
+| `Pet` | Stores pet details and owns one `Schedule`. Its task methods pass calls through to that schedule. |
+| `Schedule` | One pet's list of tasks. It adds, edits, removes and filters tasks, and builds daily, weekly and monthly views. |
+| `Task` | One activity: name, category, date, start and end time, priority (1-5), recurrence and per-date completion. It validates itself on creation and on every edit. |
+| `Scheduler` | The "brain". It plans across all of an owner's pets: it sorts the day's tasks, detects overlapping tasks and computes remaining time. |
+
+**How they work together**
+
+1. You create an owner through `PawPal.add_owner()` and pets through `Owner.add_pet()`.
+2. Tasks are added with `Pet.add_task()`, which hands them to the pet's `Schedule`. The schedule links each task back to its pet.
+3. `Scheduler` takes an `Owner`, calls `Owner.get_all_tasks()` to pull every pet's tasks together, and keeps only those that occur on the requested date.
+4. From that combined list it produces the daily plan in time order, sorts by time, priority or duration, finds conflicts, and returns remaining minutes. Conflicts are found across pets, because one person cannot do two things at once.
+
+**Key design decisions**
+
+- **Per-date completion:** a task stores the set of dates it was completed on, so finishing a recurring task today does not mark every future day done.
+- **Recurrence:** tasks can repeat `daily`, `weekly` or `monthly`, and `occurs_on(date)` decides whether a task falls on a given day.
+- **Validation:** bad input, such as a blank name, an out-of-range priority or an end time before the start, raises a `ValueError`. Editing a task rolls back if the new values are invalid.
+- **Overbooking:** `remaining_minutes` can go negative, which shows by how much a day is overbooked.
+
+
+
 ## 🖥️ Sample Output
 
 ### CLI (`python main.py`)
@@ -49,14 +79,14 @@ pip install -r requirements.txt
 Today's Schedule for Ana - Sunday, October 11, 2026
 ------------------------------------------------------------
 [ ] Not done 09:00 AM - 09:30 AM  Breakfast       (Princess Donut, feeding, priority 5)
-[ ] Not done 09:00 AM - 09:30 AM  Breafast        (Mongo, feeding, priority 5)
+[ ] Not done 09:00 AM - 09:30 AM  Breakfast       (Mongo, feeding, priority 5)
 [ ] Not done 10:00 AM - 11:00 AM  Morning Walk    (Mongo, walk, priority 4)
 [ ] Not done 02:00 PM - 04:00 PM  Vet Visit       (Princess Donut, meds, priority 5)
              note: Donut needs to get her vaccinations
 ------------------------------------------------------------
 Minutes remaining: 240
 
-WARNING: 'Breakfast' (Princess Donut) overlaps 'Breafast' (Mongo)
+WARNING: 'Breakfast' (Princess Donut) overlaps 'Breakfast' (Mongo)
 ```
 
 Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:

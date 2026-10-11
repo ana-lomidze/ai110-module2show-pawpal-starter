@@ -13,7 +13,7 @@ mongo = owner.add_pet("Mongo", "Dog", 1)
 #add four tasks with different times
 donut.add_task(Task("Breakfast", "feeding", date.today(), time(9, 0), time(9, 30), 5))
 donut.add_task(Task("Vet Visit", "meds", date.today(),  time(14, 0), time(16, 0), 5, "Donut needs to get her vaccinations"))
-mongo.add_task(Task("Breafast", "feeding", date.today(), time(9, 0), time(9, 30), 5))
+mongo.add_task(Task("Breakfast", "feeding", date.today(), time(9, 0), time(9, 30), 5))
 mongo.add_task(Task("Morning Walk", "walk", date.today(), time(10, 0), time(11, 0), 4))
 
 #print "Today's Schedule"

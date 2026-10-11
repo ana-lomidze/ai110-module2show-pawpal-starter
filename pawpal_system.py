@@ -34,9 +34,11 @@ class Task:
     MAX_PRIORITY: ClassVar[int] = 5
 
     def __post_init__(self) -> None:
+        """Validate the task as soon as it is created."""
         self.validate()
 
     def validate(self) -> None:
+        """Raise ValueError if any task field holds an invalid value."""
         if not self.name.strip():
             raise ValueError("Task name cannot be empty")
         if self.category not in self.CATEGORIES:
@@ -51,11 +53,13 @@ class Task:
             raise ValueError("End time must be after start time")
 
     def get_duration(self) -> float:
+        """Return the task's length in minutes."""
         start = datetime.combine(self.date, self.start_time)
         end = datetime.combine(self.date, self.end_time)
         return (end - start).total_seconds() / 60
 
     def occurs_on(self, date: date) -> bool:
+        """Return True if the task falls on the given date, accounting for recurrence."""
         if date < self.date:
             return False
         if self.recurrence == "daily":
@@ -67,9 +71,11 @@ class Task:
         return date == self.date  # "none"
 
     def is_complete(self, on: Optional[date] = None) -> bool:
+        """Return True if the task has been completed on the given date (default: its own date)."""
         return (on or self.date) in self.completed_dates
 
     def mark_complete(self, on: Optional[date] = None) -> None:
+        """Mark the task complete for the given date (default: its own date)."""
         on = on or self.date
         if not self.occurs_on(on):
             raise ValueError(f"Task does not occur on {on}")
@@ -83,22 +89,26 @@ class Schedule:
     }
 
     def __init__(self, pet: "Pet") -> None:
+        """Create an empty schedule for the given pet."""
         self.pet: Pet = pet
         self.tasks: List[Task] = []
 
     def get_task(self, task: Task) -> Task:
+        """Return the stored task matching the given task's id, or raise ValueError."""
         for t in self.tasks:
             if t.id == task.id:
                 return t
         raise ValueError("Task not found in this schedule")
 
     def add_task(self, task: Task) -> None:
+        """Add a task to the schedule and link it to this schedule's pet."""
         if any(t.id == task.id for t in self.tasks):
             raise ValueError("Task is already in this schedule")
         task.pet = self.pet
         self.tasks.append(task)
 
     def edit_task(self, task: Task, updates: dict) -> None:
+        """Apply field updates to a task, rolling back if the result is invalid."""
         stored = self.get_task(task)
         unknown = set(updates) - self.EDITABLE_FIELDS
         if unknown:
@@ -114,11 +124,13 @@ class Schedule:
             raise
 
     def remove_task(self, task: Task) -> None:
+        """Remove a task from the schedule and unlink it from the pet."""
         stored = self.get_task(task)
         self.tasks.remove(stored)
         stored.pet = None
 
     def get_tasks(self) -> List[Task]:
+        """Return a copy of all tasks, sorted by date then start time."""
         return sorted(self.tasks, key=lambda t: (t.date, t.start_time))
 
     def filter_tasks(
@@ -130,6 +142,7 @@ class Schedule:
         completed: Optional[bool] = None,
         date: Optional[date] = None,
     ) -> List[Task]:
+        """Return tasks matching every filter given (duration is a maximum in minutes)."""
         results: List[Task] = []
         for t in self.get_tasks():
             if name is not None and name.lower() not in t.name.lower():
@@ -148,16 +161,19 @@ class Schedule:
         return results
 
     def daily_display(self, date: date) -> List[Task]:
+        """Return the tasks occurring on the given date, sorted by start time."""
         return sorted(
             (t for t in self.tasks if t.occurs_on(date)),
             key=lambda t: t.start_time,
         )
 
     def weekly_display(self, start_date: date) -> Dict[date, List[Task]]:
+        """Return a day-to-tasks mapping for the seven days starting at start_date."""
         days = [start_date + timedelta(days=i) for i in range(7)]
         return {day: self.daily_display(day) for day in days}
 
     def monthly_display(self, month: int, year: int) -> Dict[date, List[Task]]:
+        """Return a day-to-tasks mapping for every day of the given month."""
         if not 1 <= month <= 12:
             raise ValueError("Month must be between 1 and 12")
         days_in_month = calendar.monthrange(year, month)[1]
@@ -174,9 +190,11 @@ class Pet:
     schedule: Schedule = field(init=False, repr=False, compare=False)
 
     def __post_init__(self) -> None:
+        """Give the pet its own empty schedule."""
         self.schedule = Schedule(self)
 
     def edit_info(self, name: str, pet_type: str, age: int) -> None:
+        """Update the pet's name, type and age after validating them."""
         name = name.strip()
         if not name:
             raise ValueError("Pet name cannot be empty")
@@ -189,15 +207,19 @@ class Pet:
         self.age = age
 
     def add_task(self, task: Task) -> None:
+        """Add a task to this pet's schedule."""
         self.schedule.add_task(task)
 
     def edit_task(self, task: Task, updates: dict) -> None:
+        """Edit a task in this pet's schedule."""
         self.schedule.edit_task(task, updates)
 
     def remove_task(self, task: Task) -> None:
+        """Remove a task from this pet's schedule."""
         self.schedule.remove_task(task)
 
     def get_tasks(self) -> List[Task]:
+        """Return this pet's tasks, sorted by date then start time."""
         return self.schedule.get_tasks()
 
 
@@ -209,6 +231,7 @@ class Owner:
         preferences: Optional[List[str]] = None,
         _token: object = None,
     ) -> None:
+        """Create an owner; only allowed through PawPal.add_owner()."""
         if _token is not _OWNER_TOKEN:
             raise TypeError("Owners must be created with PawPal.add_owner()")
         self.name: str = name
@@ -217,6 +240,7 @@ class Owner:
         self.preferences: List[str] = preferences if preferences is not None else []
 
     def add_pet(self, name: str, pet_type: str, age: int) -> Pet:
+        """Create a pet for this owner after validating its details, and return it."""
         name = name.strip()
         if not name:
             raise ValueError("Pet name cannot be empty")
@@ -229,9 +253,11 @@ class Owner:
         return pet
 
     def get_pets(self) -> List[Pet]:
+        """Return a copy of the owner's list of pets."""
         return list(self.pets)
 
     def get_all_tasks(self) -> List[Task]:
+        """Return every task from all of the owner's pets."""
         tasks: List[Task] = []
         for pet in self.pets:
             tasks.extend(pet.get_tasks())
@@ -240,9 +266,11 @@ class Owner:
 
 class PawPal:
     def __init__(self) -> None:
+        """Create an app registry with no owners."""
         self.owners: List[Owner] = []
 
     def add_owner(self, name: str) -> Owner:
+        """Create and register a new owner with a unique, non-empty name."""
         name = name.strip()
         if not name:
             raise ValueError("Owner name cannot be empty")
@@ -253,24 +281,30 @@ class PawPal:
         return owner
 
     def get_owners(self) -> List[Owner]:
+        """Return a copy of the list of registered owners."""
         return list(self.owners)
 
 
 class Scheduler:
     def __init__(self, owner: Owner) -> None:
+        """Create a scheduler that plans tasks across all of the given owner's pets."""
         self.owner: Owner = owner
 
     @staticmethod
     def _overlaps(a: Task, b: Task) -> bool:
+        """Return True if two tasks' time ranges overlap (back-to-back is not an overlap)."""
         return a.start_time < b.end_time and b.start_time < a.end_time
 
     def _tasks_on(self, date: date) -> List[Task]:
+        """Return all of the owner's tasks, across every pet, that occur on the date."""
         return [t for t in self.owner.get_all_tasks() if t.occurs_on(date)]
 
     def daily_plan(self, date: date) -> List[Task]:
+        """Return the whole day's tasks across all pets, in time order."""
         return self.sort_tasks(date, "time")
 
     def sort_tasks(self, date: date, by: str) -> List[Task]:
+        """Return the day's tasks sorted by "time", "priority" (highest first) or "duration"."""
         keys = {
             "time": lambda t: t.start_time,
             "priority": lambda t: (-t.priority, t.start_time),
@@ -281,9 +315,11 @@ class Scheduler:
         return sorted(self._tasks_on(date), key=keys[by])
 
     def find_conflicts(self, date: date) -> List[Tuple[Task, Task]]:
+        """Return every pair of overlapping tasks on the date, across all pets."""
         tasks = self.sort_tasks(date, "time")
         return [(a, b) for a, b in combinations(tasks, 2) if self._overlaps(a, b)]
 
     def remaining_minutes(self, date: date) -> float:
+        """Return the owner's available minutes minus scheduled minutes (negative if overbooked)."""
         used = sum(t.get_duration() for t in self._tasks_on(date))
         return self.owner.daily_available_minutes - used

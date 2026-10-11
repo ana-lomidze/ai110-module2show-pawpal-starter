@@ -9,8 +9,6 @@ Three Core Actions:
 2. Add/Edit tasks (duriation, name of task, category, priority)
 3. Scheduling: Display a daily schedule/plan based on constraints (filters) and priorities.
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
 
 Classes Used:
 1. PawPal: Stores the list of owners. Responsibilities include adding an owner and fetching the list of owners.
@@ -22,9 +20,6 @@ Classes Used:
 
 
 **b. Design changes**
-
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
 
 My design changed while I turned the UML into Python stubs and reviewed the class relationships. The biggest change was adding a top-level PawPal class that holds all owners, so owners are created through PawPal.add_owner() instead of directly. I also changed Scheduler to plan for an Owner instead of a single Schedule. The first version could only plan for one pet, but a real owner has several pets and needs one daily plan across all of them. To support that, I gave Task, Schedule and Pet back-references to their pet and owner. I also added a unique id to Task, so editing or removing a task can't hit a different task with identical details.
 
@@ -50,13 +45,11 @@ After checking the project requirements, I also added add_task, edit_task, remov
 
 **a. How you used AI**
 
-- How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
-- What kinds of prompts or questions were most helpful?
+I used AI for brainstorming and finding holes in my inital design. My very first design - like me just drawing out the idea on paper - was very bare bones. When I gave Claude my plan it agreed fully but when I got started talking with it and going back-and-forth, I realized that there were aspects of my design missing. A big one was the overall connection and relationship between all the classes across the application. An owner needs to be linked to their pet(s) in some way. Schedule needs to linked to the owner. All of these things came slowly from me brainstorming the app idea with Claude.
 
 **b. Judgment and verification**
 
-- Describe one moment where you did not accept an AI suggestion as-is.
-- How did you evaluate or verify what the AI suggested?
+One AI suggestion that I rejected was during the implementation of the 'skeleton' classes. While working on Owner, Claude suggested get_pet_names() alongside get_pets(). I thought that this was redundent for the time being. There is no need to have both those functions. The function get_pet_names() could be implemented as a helper function down the line, but for the time being, it wasn't needed.
 
 ---
 
