@@ -44,8 +44,8 @@ pip install -r requirements.txt
 
 ## 🖥️ Sample Output
 
-### CLI (python main.py)
-
+### CLI (`python main.py`)
+```
 Today's Schedule for Ana - Sunday, October 11, 2026
 ------------------------------------------------------------
 [ ] Not done 09:00 AM - 09:30 AM  Breakfast       (Princess Donut, feeding, priority 5)
@@ -57,6 +57,7 @@ Today's Schedule for Ana - Sunday, October 11, 2026
 Minutes remaining: 240
 
 WARNING: 'Breakfast' (Princess Donut) overlaps 'Breafast' (Mongo)
+```
 
 Paste a sample of your app's CLI or Streamlit output here so a reader can see what a generated plan looks like:
 
