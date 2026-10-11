@@ -21,6 +21,10 @@ classDiagram
         +Owner owner
         +Schedule schedule
         +edit_info(name, pet_type, age) void
+        +add_task(task) void
+        +edit_task(task, updates) void
+        +remove_task(task) void
+        +get_tasks() List~Task~
     }
 
     class Schedule {

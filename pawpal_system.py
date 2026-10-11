@@ -90,6 +90,18 @@ class Pet:
     def edit_info(self, name: str, pet_type: str, age: int) -> None:
         pass
 
+    def add_task(self, task: Task) -> None:
+        pass
+
+    def edit_task(self, task: Task, updates: dict) -> None:
+        pass
+
+    def remove_task(self, task: Task) -> None:
+        pass
+
+    def get_tasks(self) -> List[Task]:
+        pass
+
 
 class Owner:
     def __init__(
