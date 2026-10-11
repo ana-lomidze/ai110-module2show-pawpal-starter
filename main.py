@@ -33,11 +33,18 @@ for task in scheduler.daily_plan(today):
 print("-" * 60)
 print(f"Minutes remaining: {scheduler.remaining_minutes(today):.0f}")
 
-conflicts = scheduler.find_conflicts(today)
-if conflicts:
+#add a task that overlaps Mongo's walk: the scheduler returns warnings, it never crashes
+grooming = Task("Grooming", "grooming", today, time(10, 30), time(11, 30), 3)
+donut.add_task(grooming)
+print()
+for message in scheduler.warnings_for(grooming):
+    print(f"WARNING when adding '{grooming.name}': {message}")
+
+warnings = scheduler.conflict_warnings(today)
+if warnings:
     print()
-    for a, b in conflicts:
-        print(f"WARNING: '{a.name}' ({a.pet.name}) overlaps '{b.name}' ({b.pet.name})")
+    for message in warnings:
+        print(message)
 
 #complete the daily walk: the next occurrence is created automatically
 print()

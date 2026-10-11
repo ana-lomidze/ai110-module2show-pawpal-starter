@@ -6,7 +6,6 @@ core classes for the app (PawPal), owners, pets, schedules, tasks, and schedulin
 import calendar
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
-from itertools import combinations
 from typing import ClassVar, Dict, List, Optional, Set, Tuple
 from uuid import uuid4
 
@@ -365,9 +364,55 @@ class Scheduler:
         return results
 
     def find_conflicts(self, date: date) -> List[Tuple[Task, Task]]:
-        """Return every pair of overlapping tasks on the date, across all pets."""
-        tasks = self.sort_tasks(date, "time")
-        return [(a, b) for a, b in combinations(tasks, 2) if self._overlaps(a, b)]
+        """Return every pair of overlapping tasks on the date, across all pets.
+
+        One pass over the tasks in start order: each task is only compared with the
+        earlier tasks that are still running when it starts.
+        """
+        pairs: List[Tuple[Task, Task]] = []
+        running: List[Task] = []
+        for task in self.sort_tasks(date, "time"):
+            running = [t for t in running if t.end_time > task.start_time]
+            pairs.extend((t, task) for t in running)
+            running.append(task)
+        return pairs
+
+    @staticmethod
+    def is_shared_time(a: Task, b: Task) -> bool:
+        """Return True if two overlapping tasks can be done together (same category, different pets)."""
+        return a.pet is not b.pet and a.category == b.category
+
+    @staticmethod
+    def describe_conflict(a: Task, b: Task) -> str:
+        """Return a warning message for two overlapping tasks (a "Conflict" or a softer "Heads-up")."""
+        start = max(a.start_time, b.start_time)
+        end = min(a.end_time, b.end_time)
+        when = f"{start:%I:%M %p} - {end:%I:%M %p}"
+        pet_a = a.pet.name if a.pet else "no pet"
+        pet_b = b.pet.name if b.pet else "no pet"
+        if a.pet is b.pet:
+            return f"Conflict: '{a.name}' and '{b.name}' for {pet_a} overlap ({when})."
+        if Scheduler.is_shared_time(a, b):
+            return (
+                f"Heads-up: '{a.name}' ({pet_a}) and '{b.name}' ({pet_b}) overlap ({when}). "
+                "Fine if you do them together."
+            )
+        return (
+            f"Conflict: '{a.name}' ({pet_a}) and '{b.name}' ({pet_b}) overlap ({when}). "
+            "You can't do both at once."
+        )
+
+    def conflict_warnings(self, date: date) -> List[str]:
+        """Return a warning message for every overlap on the date (empty list if none)."""
+        return [self.describe_conflict(a, b) for a, b in self.find_conflicts(date)]
+
+    def warnings_for(self, task: Task) -> List[str]:
+        """Return warning messages for the other tasks on the same date that overlap this task."""
+        return [
+            self.describe_conflict(other, task)
+            for other in self._tasks_on(task.date)
+            if other.id != task.id and self._overlaps(other, task)
+        ]
 
     @staticmethod
     def _busy_minutes(tasks: List[Task]) -> float:

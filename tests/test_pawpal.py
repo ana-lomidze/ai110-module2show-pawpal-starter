@@ -184,6 +184,106 @@ def test_filter_status_is_per_date():
     assert scheduler.filter_tasks(follow_up.date, status="done") == []
 
 
+def make_conflict_setup():
+    owner = PawPal().add_owner("Ana")
+    donut = owner.add_pet("Princess Donut", "Cat", 3)
+    mongo = owner.add_pet("Mongo", "Dog", 1)
+    return Scheduler(owner), donut, mongo
+
+
+def test_no_overlap_means_no_warnings():
+    scheduler, donut, mongo = make_conflict_setup()
+    donut.add_task(make_task(start_time=time(9, 0), end_time=time(9, 30)))
+    mongo.add_task(make_task(start_time=time(9, 30), end_time=time(10, 0)))  # back-to-back
+
+    assert scheduler.find_conflicts(DAY) == []
+    assert scheduler.conflict_warnings(DAY) == []
+
+
+def test_no_tasks_means_no_warnings():
+    scheduler, _, _ = make_conflict_setup()
+
+    assert scheduler.conflict_warnings(DAY) == []
+
+
+def test_same_pet_overlap_is_a_conflict():
+    scheduler, donut, _ = make_conflict_setup()
+    donut.add_task(make_task(name="Walk", category="walk", start_time=time(10, 0), end_time=time(11, 0)))
+    donut.add_task(make_task(name="Groom", category="grooming", start_time=time(10, 30), end_time=time(11, 30)))
+
+    (message,) = scheduler.conflict_warnings(DAY)
+
+    assert message.startswith("Conflict:")
+    assert "'Walk' and 'Groom' for Princess Donut" in message
+    assert "10:30 AM - 11:00 AM" in message
+
+
+def test_different_pets_different_categories_is_a_conflict():
+    scheduler, donut, mongo = make_conflict_setup()
+    donut.add_task(make_task(name="Breakfast", category="feeding"))
+    mongo.add_task(make_task(name="Walk", category="walk", start_time=time(9, 15), end_time=time(10, 0)))
+
+    (message,) = scheduler.conflict_warnings(DAY)
+
+    assert message.startswith("Conflict:")
+    assert "can't do both" in message
+
+
+def test_different_pets_same_category_is_a_heads_up():
+    scheduler, donut, mongo = make_conflict_setup()
+    donut.add_task(make_task(name="Breakfast"))
+    mongo.add_task(make_task(name="Breakfast"))
+
+    pairs = scheduler.find_conflicts(DAY)
+    (message,) = scheduler.conflict_warnings(DAY)
+
+    assert len(pairs) == 1
+    assert Scheduler.is_shared_time(*pairs[0]) is True
+    assert message.startswith("Heads-up:")
+
+
+def test_same_pet_same_category_is_still_a_conflict():
+    scheduler, donut, _ = make_conflict_setup()
+    donut.add_task(make_task(name="Walk A", category="walk"))
+    donut.add_task(make_task(name="Walk B", category="walk"))
+
+    (message,) = scheduler.conflict_warnings(DAY)
+
+    assert message.startswith("Conflict:")
+
+
+def test_find_conflicts_pairs_every_overlap():
+    scheduler, donut, mongo = make_conflict_setup()
+    donut.add_task(make_task(name="Long", category="walk", start_time=time(9, 0), end_time=time(12, 0)))
+    mongo.add_task(make_task(name="A", category="meds", start_time=time(9, 30), end_time=time(10, 0)))
+    mongo.add_task(make_task(name="B", category="enrichment", start_time=time(11, 0), end_time=time(11, 30)))
+    mongo.add_task(make_task(name="C", category="grooming", start_time=time(13, 0), end_time=time(14, 0)))
+
+    pairs = {(a.name, b.name) for a, b in scheduler.find_conflicts(DAY)}
+
+    assert pairs == {("Long", "A"), ("Long", "B")}
+
+
+def test_warnings_for_new_task_lists_only_its_overlaps():
+    scheduler, donut, mongo = make_conflict_setup()
+    mongo.add_task(make_task(name="Walk", category="walk", start_time=time(10, 0), end_time=time(11, 0)))
+    mongo.add_task(make_task(name="Dinner", start_time=time(18, 0), end_time=time(18, 30)))
+    new_task = make_task(name="Groom", category="grooming", start_time=time(10, 30), end_time=time(11, 30))
+    donut.add_task(new_task)
+
+    (message,) = scheduler.warnings_for(new_task)
+
+    assert "'Walk' (Mongo)" in message and "'Groom' (Princess Donut)" in message
+
+
+def test_warnings_for_task_without_overlap_is_empty_and_does_not_raise():
+    scheduler, donut, _ = make_conflict_setup()
+    task = make_task()
+    donut.add_task(task)
+
+    assert scheduler.warnings_for(task) == []
+
+
 def test_adding_task_increases_pet_task_count():
     pet = make_pet()
     assert len(pet.get_tasks()) == 0

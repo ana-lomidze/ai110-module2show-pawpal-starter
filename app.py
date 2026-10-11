@@ -115,20 +115,22 @@ else:
             st.error("Enter a start time and an end time.")
         else:
             try:
-                pets_by_name[task_pet_name].add_task(
-                    Task(
-                        task_title,
-                        category,
-                        task_date,
-                        start_time,
-                        end_time,
-                        priority,
-                        comment,
-                        recurrence,
-                    )
+                new_task = Task(
+                    task_title,
+                    category,
+                    task_date,
+                    start_time,
+                    end_time,
+                    priority,
+                    comment,
+                    recurrence,
                 )
+                pets_by_name[task_pet_name].add_task(new_task)
             except ValueError as e:
                 st.error(str(e))
+            else:
+                for message in Scheduler(owner).warnings_for(new_task):
+                    st.warning(message)
 
 all_tasks = sorted(owner.get_all_tasks(), key=lambda t: (t.date, t.start_time))
 if all_tasks:
@@ -220,4 +222,8 @@ else:
         st.success(f"{remaining:.0f} of {owner.daily_available_minutes} minutes remaining.")
 
     for a, b in scheduler.find_conflicts(plan_date):
-        st.warning(f"'{a.name}' ({a.pet.name}) overlaps '{b.name}' ({b.pet.name}).")
+        message = scheduler.describe_conflict(a, b)
+        if scheduler.is_shared_time(a, b):
+            st.info(message)
+        else:
+            st.warning(message)
