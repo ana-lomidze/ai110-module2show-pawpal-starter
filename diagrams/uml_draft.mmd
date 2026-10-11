@@ -11,7 +11,8 @@ classDiagram
         +int daily_available_minutes
         +List~str~ preferences
         +add_pet(name, pet_type, age) Pet
-        +get_pet_names() List~Pet~
+        +get_pets() List~Pet~
+        +get_all_tasks() List~Task~
     }
 
     class Pet {
@@ -68,6 +69,7 @@ classDiagram
 
     PawPal "1" *-- "0..*" Owner : contains
     Owner "1" *-- "0..*" Pet : owns
+    Owner ..> Task : collects
     Pet "0..*" --> "1" Owner : belongs to
     Pet "1" *-- "1" Schedule : has
     Schedule "1" --> "1" Pet : for
