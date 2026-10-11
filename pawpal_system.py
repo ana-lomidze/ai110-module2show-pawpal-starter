@@ -30,6 +30,7 @@ class Task:
 
     CATEGORIES: ClassVar[List[str]] = ["walk", "feeding", "meds", "enrichment", "grooming"]
     RECURRENCES: ClassVar[List[str]] = ["none", "daily", "weekly", "monthly"]
+    RECURRENCE_DAYS: ClassVar[Dict[str, int]] = {"daily": 1, "weekly": 7, "monthly": 30}
     MIN_PRIORITY: ClassVar[int] = 1
     MAX_PRIORITY: ClassVar[int] = 5
 
@@ -59,16 +60,13 @@ class Task:
         return (end - start).total_seconds() / 60
 
     def occurs_on(self, date: date) -> bool:
-        """Return True if the task falls on the given date, accounting for recurrence."""
-        if date < self.date:
-            return False
-        if self.recurrence == "daily":
-            return True
-        if self.recurrence == "weekly":
-            return (date - self.date).days % 7 == 0
-        if self.recurrence == "monthly":
-            return date.day == self.date.day
-        return date == self.date  # "none"
+        """Return True if the task falls on the given date (each instance has one date)."""
+        return date == self.date
+
+    def next_date(self) -> Optional[date]:
+        """Return the date of the next occurrence, or None if the task doesn't repeat."""
+        days = self.RECURRENCE_DAYS.get(self.recurrence)
+        return self.date + timedelta(days=days) if days else None
 
     def is_complete(self, on: Optional[date] = None) -> bool:
         """Return True if the task has been completed on the given date (default: its own date)."""
@@ -122,6 +120,26 @@ class Schedule:
             for key, value in original.items():
                 setattr(stored, key, value)
             raise
+
+    def complete_task(self, task: Task, on: Optional[date] = None) -> Optional[Task]:
+        """Mark a task complete and, if it repeats, add the next occurrence; return the new task."""
+        stored = self.get_task(task)
+        stored.mark_complete(on)
+        next_date = stored.next_date()
+        if next_date is None:
+            return None
+        already_exists = any(
+            t.date == next_date and t.name == stored.name and t.start_time == stored.start_time
+            for t in self.tasks
+        )
+        if already_exists:  # completing twice must not spawn twice
+            return None
+        follow_up = Task(
+            stored.name, stored.category, next_date, stored.start_time,
+            stored.end_time, stored.priority, stored.comment, stored.recurrence,
+        )
+        self.add_task(follow_up)
+        return follow_up
 
     def remove_task(self, task: Task) -> None:
         """Remove a task from the schedule and unlink it from the pet."""
@@ -213,6 +231,10 @@ class Pet:
     def edit_task(self, task: Task, updates: dict) -> None:
         """Edit a task in this pet's schedule."""
         self.schedule.edit_task(task, updates)
+
+    def complete_task(self, task: Task, on: Optional[date] = None) -> Optional[Task]:
+        """Complete a task in this pet's schedule, returning the next occurrence if it repeats."""
+        return self.schedule.complete_task(task, on)
 
     def remove_task(self, task: Task) -> None:
         """Remove a task from this pet's schedule."""

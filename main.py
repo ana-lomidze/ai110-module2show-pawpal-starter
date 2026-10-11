@@ -1,6 +1,6 @@
 #testing grounds
 from pawpal_system import PawPal, Owner, Pet, Task, Schedule, Scheduler
-from datetime import date, time
+from datetime import date, time, timedelta
 
 #create an Owner
 pawpal = PawPal()
@@ -14,7 +14,8 @@ mongo = owner.add_pet("Mongo", "Dog", 1)
 donut.add_task(Task("Breakfast", "feeding", date.today(), time(9, 0), time(9, 30), 5))
 donut.add_task(Task("Vet Visit", "meds", date.today(),  time(14, 0), time(16, 0), 5, "Donut needs to get her vaccinations"))
 mongo.add_task(Task("Breakfast", "feeding", date.today(), time(9, 0), time(9, 30), 5))
-mongo.add_task(Task("Morning Walk", "walk", date.today(), time(10, 0), time(11, 0), 4))
+mongo_walk = Task("Morning Walk", "walk", date.today(), time(10, 0), time(11, 0), 4, recurrence="daily")
+mongo.add_task(mongo_walk)
 
 #print "Today's Schedule"
 today = date.today()
@@ -37,3 +38,21 @@ if conflicts:
     print()
     for a, b in conflicts:
         print(f"WARNING: '{a.name}' ({a.pet.name}) overlaps '{b.name}' ({b.pet.name})")
+
+#complete the daily walk: the next occurrence is created automatically
+print()
+print(f"Completing '{mongo_walk.name}' ({mongo.name}, repeats {mongo_walk.recurrence})...")
+next_walk = mongo.complete_task(mongo_walk)
+if next_walk:
+    print(f"Next occurrence created for {next_walk.date.strftime('%A, %B %d, %Y')} "
+          f"at {next_walk.start_time.strftime('%I:%M %p')}")
+
+#completing the same task again must not create a duplicate
+print(f"Completing it again creates a new task: {mongo.complete_task(mongo_walk) is not None}")
+
+tomorrow = today + timedelta(days=1)
+print(f"\nTomorrow's Schedule - {tomorrow.strftime('%A, %B %d, %Y')}")
+print("-" * 60)
+for task in scheduler.daily_plan(tomorrow):
+    print(f"{task.start_time.strftime('%I:%M %p')} - {task.end_time.strftime('%I:%M %p')}  "
+          f"{task.name:<15} ({task.pet.name})")
