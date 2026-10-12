@@ -31,8 +31,9 @@ After checking the project requirements, I also added add_task, edit_task, remov
 
 **a. Constraints and priorities**
 
-- What constraints does your scheduler consider (for example: time, priority, preferences)?
-- How did you decide which constraints mattered most?
+In the README it stated to consider the owner's prefence. I decided to include it in my inital plannin, but as I started implementing the code, I couldn't think of a purose for a "prefrence." Wouldn't know what it could be used for either and how it could be tracked or measured. So for the time being, I decided to remove this from the code.
+
+The Owner's prefrence can also meld into the priority and the filters they can have on the schedule. So I think my final decision was ok to make.
 
 **b. Tradeoffs**
 
@@ -56,13 +57,15 @@ One AI suggestion that I rejected was during the implementation of the 'skeleton
 
 **a. What you tested**
 
-- What behaviors did you test?
-- Why were these tests important?
+I tested running the application and seeing how the UI worked/looked. I want to point out, all the testing done (test_pawpal.py and main.py tests included) is very important. Especially when the UI isn't ready or fully developed yet. But I found that once the UI was ready to run, I tested different cases on tht UI a lot. I tried different combinations of task, pets, times, durations. This is where a good deal of finds were done on my end.
+
+AI is really good at testing from the command prompt, but it can't test directly on the UI (at least not our AI since it doesn't have any skills built into it). So I noticed things that the Claude couldn't.
 
 **b. Confidence**
 
-- How confident are you that your scheduler works correctly?
-- What edge cases would you test next if you had more time?
+Overall I think this app works well for the amount of time put into it! However, there are things I would like to add. For example, for conflicts, I would like to have added a warning directly next to the tasks on the schedule that are conflicting.
+
+I would also like to add a multiple owner functionality.
 
 ---
 
@@ -70,12 +73,12 @@ One AI suggestion that I rejected was during the implementation of the 'skeleton
 
 **a. What went well**
 
-- What part of this project are you most satisfied with?
+Testing. I believe that the testing went smooth. I think this is in part because Claude was very diligent and tested all the changes it made along the implementation.
 
 **b. What you would improve**
 
-- If you had another iteration, what would you improve or redesign?
+I would incorporate a database to keep track of owners, pets, and tasks on the database so that new entries don't have to be added upon each new run of the app.
 
 **c. Key takeaway**
 
-- What is one important thing you learned about designing systems or working with AI on this project?
+AI is really good at remembering things! I would tell it "Here is a list of things we need to do. Let's do this one-by-one and take considerations of implementation for each." Once we were done with one of the items on the list Claude would tell me "Here is a list of things that is left: ... Which one should we cover next?" I really liked this because we were able to take things step-by-step. I think this helped a lot in the grand scheme of things since this is how programming should be (and was before the use of AI). We would implement things one clasee, or one function at a time. And doing this with a very smart helper I think reduced the amount of bugs I ran into.

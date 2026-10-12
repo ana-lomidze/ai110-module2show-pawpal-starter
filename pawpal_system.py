@@ -405,16 +405,18 @@ class Scheduler:
         category: Optional[str] = None,
         longer_than: Optional[float] = None,
         at_most: Optional[float] = None,
+        sort_by: str = "time",
     ) -> List[Task]:
-        """Return the day's tasks in time order, filtered by pet name, status, category and length.
+        """Return the day's tasks, filtered by pet name, status, category and length, then sorted.
 
         status is "done", "pending" or None; completion is checked for this date only.
         longer_than (exclusive) and at_most (inclusive) bound the duration in minutes.
+        sort_by is "time" (default), "priority" or "duration", as in sort_tasks.
         """
         if status not in (None, "done", "pending"):
             raise ValueError("Status must be 'done', 'pending' or None")
         results: List[Task] = []
-        for t in self.sort_tasks(date, "time"):
+        for t in self.sort_tasks(date, sort_by):
             if pet_name is not None and t.pet.name != pet_name:
                 continue
             if category is not None and t.category != category:

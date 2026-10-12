@@ -678,6 +678,42 @@ def test_sort_by_duration_is_shortest_first_with_ties_by_time():
     assert [t.name for t in result] == ["Late", "Mid", "Early"]  # 15, 45, 90 min
 
 
+def make_priority_scheduler():
+    """Three tasks whose time, priority and duration orders all differ (one pet is enough)."""
+    owner = PawPal().add_owner("Ana")
+    pet = owner.add_pet("Mongo", "dog", 1)
+    pet.add_task(make_task(name="A", start_time=time(8, 0), end_time=time(8, 30), priority=1))    # 30 min
+    pet.add_task(make_task(name="B", start_time=time(9, 0), end_time=time(10, 0), priority=5))    # 60 min
+    pet.add_task(make_task(name="C", start_time=time(11, 0), end_time=time(11, 15), priority=3))  # 15 min
+    return Scheduler(owner)
+
+
+def test_filter_sorts_by_time_by_default():
+    tasks = make_priority_scheduler().filter_tasks(DAY)
+
+    assert [t.name for t in tasks] == ["A", "B", "C"]
+
+
+def test_filter_can_sort_by_priority_and_duration():
+    scheduler = make_priority_scheduler()
+
+    assert [t.name for t in scheduler.filter_tasks(DAY, sort_by="priority")] == ["B", "C", "A"]  # 5, 3, 1
+    assert [t.name for t in scheduler.filter_tasks(DAY, sort_by="duration")] == ["C", "A", "B"]  # 15, 30, 60 min
+
+
+def test_filter_sorts_after_filtering():
+    scheduler = make_priority_scheduler()
+
+    tasks = scheduler.filter_tasks(DAY, longer_than=15, sort_by="priority")
+
+    assert [t.name for t in tasks] == ["B", "A"]  # C is too short; the rest by priority 5, 1
+
+
+def test_filter_rejects_unknown_sort_key():
+    with pytest.raises(ValueError):
+        make_priority_scheduler().filter_tasks(DAY, sort_by="alphabet")
+
+
 def test_sort_excludes_tasks_from_other_dates():
     scheduler = make_sorting_scheduler()
 

@@ -1,0 +1,106 @@
+classDiagram
+    class PawPal {
+        +List~Owner~ owners
+        +add_owner(name) Owner
+        +get_owners() List~Owner~
+    }
+
+    class Owner {
+        +str name
+        +List~Pet~ pets
+        +int daily_available_minutes
+        +add_pet(name, pet_type, age) Pet
+        +get_pets() List~Pet~
+        +get_all_tasks() List~Task~
+    }
+
+    class Pet {
+        +str name
+        +str pet_type
+        +int age
+        +Owner owner
+        +Schedule schedule
+        +edit_info(name, pet_type, age) void
+        +add_task(task) void
+        +edit_task(task, updates) void
+        +edit_occurrence(task, updates) void
+        +edit_series(task, updates) void
+        +complete_task(task, on) Optional~Task~
+        +remove_task(task) void
+        +skip_task(task) Optional~Task~
+        +remove_series(task) int
+        +get_tasks() List~Task~
+    }
+
+    class Schedule {
+        +Set~str~ EDITABLE_FIELDS$
+        +Set~str~ RESET_COMPLETION_FIELDS$
+        +Pet pet
+        +List~Task~ tasks
+        +get_task(task) Task
+        +add_task(task) void
+        +edit_task(task, updates) void
+        +edit_occurrence(task, updates) void
+        +edit_series(task, updates) void
+        +complete_task(task, on) Optional~Task~
+        +remove_task(task) void
+        +skip_task(task) Optional~Task~
+        +remove_series(task) int
+        +get_tasks() List~Task~
+        +filter_tasks(name, category, priority, duration, completed, date) List~Task~
+    }
+
+    class Task {
+        +str id
+        +str series_id
+        +str name
+        +str category
+        +date date
+        +time start_time
+        +time end_time
+        +int priority
+        +str comment
+        +str recurrence
+        +Set~date~ completed_dates
+        +Pet pet
+        +List~str~ CATEGORIES$
+        +List~str~ RECURRENCES$
+        +Dict~str, int~ RECURRENCE_DAYS$
+        +int MIN_PRIORITY$
+        +int MAX_PRIORITY$
+        +validate() void
+        +get_duration() float
+        +occurs_on(date) bool
+        +next_date() Optional~date~
+        +is_complete(on) bool
+        +mark_complete(on) Optional~Task~
+        +spawn_next() Optional~Task~
+    }
+
+    class Scheduler {
+        +Owner owner
+        +daily_plan(date) List~Task~
+        +sort_tasks(date, by) List~Task~
+        +filter_tasks(date, pet_name, status, category, longer_than, at_most, sort_by) List~Task~
+        +find_conflicts(date) List~Tuple~Task, Task~~
+        +is_shared_time(a, b)$ bool
+        +describe_conflict(a, b)$ str
+        +conflict_warnings(date) List~str~
+        +warnings_for(task) List~str~
+        +remaining_minutes(date) float
+    }
+
+    PawPal "1" *-- "0..*" Owner : contains
+    PawPal ..> Owner : creates (private token)
+    Owner "1" *-- "0..*" Pet : owns
+    Owner ..> Task : collects
+    Pet "0..*" --> "1" Owner : belongs to
+    Pet "1" *-- "1" Schedule : has
+    Pet ..> Schedule : forwards task calls
+    Schedule "1" --> "1" Pet : for
+    Schedule "1" o-- "0..*" Task : contains
+    Task "0..*" --> "1" Pet : for
+    Task ..> Task : spawns next occurrence
+    Task ..> Pet : adds follow-up via
+    Scheduler "1" --> "1" Owner : plans for
+    Scheduler ..> Task : sorts, filters, checks conflicts

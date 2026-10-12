@@ -228,13 +228,22 @@ DURATION_CHOICES = {
     "Long (over 60 min)": (60, None),
 }
 
-filter_col1, filter_col2, filter_col3 = st.columns(3)
+# Sort choices: label -> key understood by Scheduler.sort_tasks
+SORT_CHOICES = {
+    "Time": "time",
+    "Priority (highest first)": "priority",
+    "Duration (shortest first)": "duration",
+}
+
+filter_col1, filter_col2, filter_col3, sort_col = st.columns(4)
 with filter_col1:
     pet_choice = st.selectbox("Show pet", pet_options, key="pet_filter")
 with filter_col2:
     status_choice = st.selectbox("Show status", ["All", "Pending", "Done"], key="status_filter")
 with filter_col3:
     duration_choice = st.selectbox("Show length", list(DURATION_CHOICES), key="duration_filter")
+with sort_col:
+    sort_choice = st.selectbox("Sort by", list(SORT_CHOICES), key="sort_filter")
 
 
 def complete_task(task: Task, on: date) -> None:
@@ -369,6 +378,7 @@ plan = scheduler.filter_tasks(
     status=None if status_choice == "All" else status_choice.lower(),
     longer_than=DURATION_CHOICES[duration_choice][0],
     at_most=DURATION_CHOICES[duration_choice][1],
+    sort_by=SORT_CHOICES[sort_choice],
 )
 
 if not day_plan:
