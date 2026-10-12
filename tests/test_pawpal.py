@@ -284,6 +284,216 @@ def test_warnings_for_task_without_overlap_is_empty_and_does_not_raise():
     assert scheduler.warnings_for(task) == []
 
 
+def pet_with_daily_task(**overrides):
+    pet = make_pet()
+    task = make_task(recurrence="daily", **overrides)
+    pet.add_task(task)
+    return pet, task
+
+
+def dates_of(pet):
+    return [t.date for t in pet.get_tasks()]
+
+
+def test_follow_up_shares_series_id_but_other_tasks_do_not():
+    pet, task = pet_with_daily_task()
+    other = make_task(name="Other")
+    pet.add_task(other)
+
+    follow_up = task.mark_complete()
+
+    assert follow_up.series_id == task.series_id
+    assert other.series_id != task.series_id
+
+
+def test_edit_task_updates_fields_and_rolls_back_when_invalid():
+    pet = make_pet()
+    task = make_task()
+    pet.add_task(task)
+
+    pet.edit_task(task, {"name": "Brunch", "priority": 2})
+    assert (task.name, task.priority) == ("Brunch", 2)
+
+    with pytest.raises(ValueError):
+        pet.edit_task(task, {"name": "Lunch", "end_time": time(8, 0)})  # ends before it starts
+    assert task.name == "Brunch"
+    assert task.end_time == time(9, 30)
+
+
+def test_editing_date_or_time_of_completed_task_makes_it_pending():
+    pet = make_pet()
+    task = make_task()
+    pet.add_task(task)
+    task.mark_complete()
+
+    pet.edit_task(task, {"date": date(2026, 10, 13)})
+    assert task.is_complete() is False
+
+    task.mark_complete()
+    pet.edit_task(task, {"start_time": time(8, 0)})
+    assert task.is_complete() is False
+
+
+def test_editing_other_fields_of_completed_task_keeps_it_done():
+    pet = make_pet()
+    task = make_task()
+    pet.add_task(task)
+    task.mark_complete()
+
+    pet.edit_task(task, {"name": "Brunch", "priority": 1, "comment": "new note"})
+
+    assert task.is_complete() is True
+
+
+def test_edit_with_same_date_keeps_completed_task_done():
+    pet = make_pet()
+    task = make_task()
+    pet.add_task(task)
+    task.mark_complete()
+
+    pet.edit_task(task, {"date": task.date})
+
+    assert task.is_complete() is True
+
+
+def test_uncompleting_by_edit_then_completing_again_does_not_duplicate_follow_up():
+    pet, task = pet_with_daily_task()
+    task.mark_complete()
+    pet.edit_task(task, {"start_time": time(8, 0), "end_time": time(8, 30)})
+    assert task.is_complete() is False
+
+    task.mark_complete()
+
+    assert dates_of(pet) == [date(2026, 10, 11), date(2026, 10, 12)]
+
+
+def test_edit_occurrence_leaves_next_occurrence_unchanged():
+    pet, task = pet_with_daily_task()
+
+    pet.edit_occurrence(task, {"start_time": time(7, 0), "end_time": time(7, 30)})
+
+    first, second = pet.get_tasks()
+    assert first.start_time == time(7, 0)
+    assert second.date == date(2026, 10, 12)
+    assert second.start_time == time(9, 0)  # the original time
+    assert second.series_id == first.series_id
+
+
+def test_edit_occurrence_on_already_followed_task_does_not_duplicate():
+    pet, task = pet_with_daily_task()
+    task.mark_complete()
+
+    pet.edit_occurrence(task, {"priority": 1})
+
+    assert dates_of(pet) == [date(2026, 10, 11), date(2026, 10, 12)]
+
+
+def test_invalid_edit_occurrence_rolls_back_and_creates_nothing():
+    pet, task = pet_with_daily_task()
+
+    with pytest.raises(ValueError):
+        pet.edit_occurrence(task, {"end_time": time(8, 0)})
+
+    assert dates_of(pet) == [date(2026, 10, 11)]
+    assert task.end_time == time(9, 30)
+
+
+def test_edit_series_changes_this_and_later_but_not_earlier_or_other_series():
+    pet, task = pet_with_daily_task()
+    other = make_task(name="Other", recurrence="daily")
+    pet.add_task(other)
+    second = task.mark_complete()
+    third = second.mark_complete()
+    # edit from the second occurrence onward
+    pet.edit_series(second, {"name": "Brunch", "priority": 1})
+
+    assert task.name == "Breakfast"  # earlier: untouched
+    assert (second.name, second.priority) == ("Brunch", 1)
+    assert (third.name, third.priority) == ("Brunch", 1)
+    assert other.name == "Other"
+
+
+def test_edit_series_date_only_changes_this_occurrence():
+    pet, task = pet_with_daily_task()
+    second = task.mark_complete()
+
+    pet.edit_series(task, {"date": date(2026, 10, 20), "priority": 2})
+
+    assert task.date == date(2026, 10, 20)
+    assert second.date == date(2026, 10, 12)  # keeps its own date
+    assert second.priority == 2
+
+
+def test_skip_task_removes_occurrence_and_keeps_series_going():
+    pet, task = pet_with_daily_task()
+
+    follow_up = pet.skip_task(task)
+
+    assert follow_up.date == date(2026, 10, 12)
+    assert dates_of(pet) == [date(2026, 10, 12)]
+    assert task.pet is None
+
+
+def test_skip_task_returns_existing_next_occurrence_without_duplicating():
+    pet, task = pet_with_daily_task()
+    existing = task.mark_complete()
+
+    follow_up = pet.skip_task(task)
+
+    assert follow_up is existing
+    assert dates_of(pet) == [date(2026, 10, 12)]
+
+
+def test_skip_non_recurring_task_just_removes_it():
+    pet = make_pet()
+    task = make_task()
+    pet.add_task(task)
+
+    assert pet.skip_task(task) is None
+    assert pet.get_tasks() == []
+
+
+def test_remove_series_removes_this_and_later_only():
+    pet, task = pet_with_daily_task()
+    other = make_task(name="Other", recurrence="daily")
+    pet.add_task(other)
+    second = task.mark_complete()
+    third = second.mark_complete()
+
+    removed = pet.remove_series(second)
+
+    assert removed == 2
+    remaining = pet.get_tasks()
+    assert task in remaining and other in remaining
+    assert second not in remaining and third not in remaining
+
+
+def test_remove_task_removes_only_that_instance():
+    pet, task = pet_with_daily_task()
+    second = task.mark_complete()
+
+    pet.remove_task(task)
+
+    assert pet.get_tasks() == [second]
+
+
+def test_edit_or_delete_clears_conflict_warning():
+    scheduler, donut, mongo = make_conflict_setup()
+    walk = make_task(name="Walk", category="walk", start_time=time(10, 0), end_time=time(11, 0))
+    groom = make_task(name="Groom", category="grooming", start_time=time(10, 30), end_time=time(11, 30))
+    mongo.add_task(walk)
+    donut.add_task(groom)
+    assert len(scheduler.conflict_warnings(DAY)) == 1
+
+    donut.edit_task(groom, {"start_time": time(12, 0), "end_time": time(13, 0)})
+    assert scheduler.conflict_warnings(DAY) == []
+
+    donut.edit_task(groom, {"start_time": time(10, 30), "end_time": time(11, 30)})
+    assert len(scheduler.conflict_warnings(DAY)) == 1
+    donut.remove_task(groom)
+    assert scheduler.conflict_warnings(DAY) == []
+
+
 def test_adding_task_increases_pet_task_count():
     pet = make_pet()
     assert len(pet.get_tasks()) == 0

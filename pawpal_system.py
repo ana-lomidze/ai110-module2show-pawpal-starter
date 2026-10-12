@@ -25,6 +25,7 @@ class Task:
     recurrence: str = "none"
     completed_dates: Set[date] = field(default_factory=set)
     id: str = field(default_factory=lambda: uuid4().hex)
+    series_id: str = field(default_factory=lambda: uuid4().hex)  # shared by a task and its follow-ups
     pet: Optional["Pet"] = field(default=None, repr=False, compare=False)
 
     CATEGORIES: ClassVar[List[str]] = ["walk", "feeding", "meds", "enrichment", "grooming"]
@@ -81,19 +82,27 @@ class Task:
         if not self.occurs_on(on):
             raise ValueError(f"Task does not occur on {on}")
         self.completed_dates.add(on)
+        return self.spawn_next()
 
+    def spawn_next(self) -> Optional["Task"]:
+        """Add the next occurrence to this task's pet and return it.
+
+        Returns None if the task doesn't repeat, has no pet, or the next occurrence
+        already exists (so completing or editing twice never creates duplicates).
+        """
         next_date = self.next_date()
         if next_date is None or self.pet is None:
             return None
         already_exists = any(
-            t.date == next_date and t.name == self.name and t.start_time == self.start_time
+            t.series_id == self.series_id and t.date == next_date
             for t in self.pet.schedule.tasks
         )
-        if already_exists:  # completing twice must not spawn twice
+        if already_exists:
             return None
         follow_up = Task(
             self.name, self.category, next_date, self.start_time,
             self.end_time, self.priority, self.comment, self.recurrence,
+            series_id=self.series_id,
         )
         self.pet.add_task(follow_up)
         return follow_up
@@ -104,6 +113,7 @@ class Schedule:
         "name", "category", "date", "start_time", "end_time",
         "priority", "comment", "recurrence",
     }
+    RESET_COMPLETION_FIELDS = {"date", "start_time", "end_time"}
 
     def __init__(self, pet: "Pet") -> None:
         """Create an empty schedule for the given pet."""
@@ -125,7 +135,10 @@ class Schedule:
         self.tasks.append(task)
 
     def edit_task(self, task: Task, updates: dict) -> None:
-        """Apply field updates to a task, rolling back if the result is invalid."""
+        """Apply field updates to one task, rolling back if the result is invalid.
+
+        Changing a task's date or times makes it pending again.
+        """
         stored = self.get_task(task)
         unknown = set(updates) - self.EDITABLE_FIELDS
         if unknown:
@@ -139,6 +152,35 @@ class Schedule:
             for key, value in original.items():
                 setattr(stored, key, value)
             raise
+        if any(updates[k] != original[k] for k in self.RESET_COMPLETION_FIELDS & set(updates)):
+            stored.completed_dates.clear()
+
+    def edit_occurrence(self, task: Task, updates: dict) -> None:
+        """Edit only this occurrence; the next occurrence is created from the unedited task."""
+        stored = self.get_task(task)
+        follow_up = stored.spawn_next()
+        try:
+            self.edit_task(stored, updates)
+        except ValueError:
+            if follow_up is not None:
+                self.remove_task(follow_up)
+            raise
+
+    def _later_in_series(self, task: Task) -> List[Task]:
+        """Return the task's later occurrences (same series, later date), in date order."""
+        return sorted(
+            (t for t in self.tasks if t.series_id == task.series_id and t.date > task.date),
+            key=lambda t: t.date,
+        )
+
+    def edit_series(self, task: Task, updates: dict) -> None:
+        """Edit this task and its later occurrences; the date only changes this occurrence."""
+        stored = self.get_task(task)
+        later = self._later_in_series(stored)
+        self.edit_task(stored, updates)
+        shared = {k: v for k, v in updates.items() if k != "date"}
+        for t in later:
+            self.edit_task(t, shared)
 
     def complete_task(self, task: Task, on: Optional[date] = None) -> Optional[Task]:
         """Mark a task complete and, if it repeats, add the next occurrence; return the new task."""
@@ -149,6 +191,29 @@ class Schedule:
         stored = self.get_task(task)
         self.tasks.remove(stored)
         stored.pet = None
+
+    def skip_task(self, task: Task) -> Optional[Task]:
+        """Remove this occurrence but keep the series going; return the next occurrence.
+
+        The next occurrence is created if needed; None only if the task doesn't repeat.
+        """
+        stored = self.get_task(task)
+        next_date = stored.next_date()
+        stored.spawn_next()
+        follow_up = next(
+            (t for t in self.tasks if t.series_id == stored.series_id and t.date == next_date),
+            None,
+        )
+        self.remove_task(stored)
+        return follow_up
+
+    def remove_series(self, task: Task) -> int:
+        """Remove this occurrence and all its later occurrences; return how many were removed."""
+        stored = self.get_task(task)
+        doomed = [stored] + self._later_in_series(stored)
+        for t in doomed:
+            self.remove_task(t)
+        return len(doomed)
 
     def get_tasks(self) -> List[Task]:
         """Return a copy of all tasks, sorted by date then start time."""
@@ -239,9 +304,25 @@ class Pet:
         """Complete a task in this pet's schedule, returning the next occurrence if it repeats."""
         return self.schedule.complete_task(task, on)
 
+    def edit_occurrence(self, task: Task, updates: dict) -> None:
+        """Edit only this occurrence of a task in this pet's schedule."""
+        self.schedule.edit_occurrence(task, updates)
+
+    def edit_series(self, task: Task, updates: dict) -> None:
+        """Edit a task and its later occurrences in this pet's schedule."""
+        self.schedule.edit_series(task, updates)
+
     def remove_task(self, task: Task) -> None:
         """Remove a task from this pet's schedule."""
         self.schedule.remove_task(task)
+
+    def skip_task(self, task: Task) -> Optional[Task]:
+        """Remove one occurrence and keep the series going; return the next occurrence."""
+        return self.schedule.skip_task(task)
+
+    def remove_series(self, task: Task) -> int:
+        """Remove a task and its later occurrences; return how many were removed."""
+        return self.schedule.remove_series(task)
 
     def get_tasks(self) -> List[Task]:
         """Return this pet's tasks, sorted by date then start time."""

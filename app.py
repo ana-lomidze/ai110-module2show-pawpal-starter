@@ -3,7 +3,7 @@ from datetime import date
 import streamlit as st
 from pawpal_system import PawPal, Owner, Pet, Task, Schedule, Scheduler
 
-st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
+st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="wide")
 
 st.title("🐾 PawPal+")
 
@@ -174,8 +174,119 @@ def complete_task(task: Task, on: date) -> None:
         )
 
 
+def open_panel(kind: str, task: Task) -> None:
+    """Button callback: open the edit or delete panel for one task (closing any other).
+
+    For edit, the form fields are loaded from the task each time the panel opens, so
+    they always start from the task's current values.
+    """
+    st.session_state.panel = (kind, task.id)
+    if kind == "edit":
+        starting_values = {
+            "name": task.name, "category": task.category, "date": task.date,
+            "start": task.start_time, "end": task.end_time, "priority": task.priority,
+            "repeats": task.recurrence, "comment": task.comment,
+            "scope": "This occurrence only",
+        }
+        for field, value in starting_values.items():
+            st.session_state[f"edit_{field}_{task.id}"] = value
+
+
+def close_panel() -> None:
+    """Close the open edit or delete panel."""
+    st.session_state.pop("panel", None)
+
+
+def edit_panel(t: Task) -> None:
+    """Show the edit form for a task, directly under its row."""
+    recurring = t.recurrence != "none"
+    with st.form(f"edit_form_{t.id}"):
+        left, right = st.columns(2)
+        name = left.text_input("Task title", key=f"edit_name_{t.id}")
+        category = left.selectbox("Category", Task.CATEGORIES, key=f"edit_category_{t.id}")
+        new_date = left.date_input("Date", key=f"edit_date_{t.id}")
+        start = right.time_input("Start time", key=f"edit_start_{t.id}")
+        end = right.time_input("End time", key=f"edit_end_{t.id}")
+        priority = right.slider(
+            "Priority (5 = most important)", Task.MIN_PRIORITY, Task.MAX_PRIORITY,
+            key=f"edit_priority_{t.id}",
+        )
+        recurrence = st.selectbox("Repeats", Task.RECURRENCES, key=f"edit_repeats_{t.id}")
+        comment = st.text_input("Note (optional)", key=f"edit_comment_{t.id}")
+        scope = None
+        if recurring:
+            scope = st.radio(
+                "Apply to",
+                ["This occurrence only", "This and all future occurrences"],
+                key=f"edit_scope_{t.id}",
+            )
+        save_col, cancel_col = st.columns(2)
+        save = save_col.form_submit_button("Save")
+        cancel = cancel_col.form_submit_button("Cancel")
+
+    if cancel:
+        close_panel()
+        st.rerun()
+    if save:
+        updates = {
+            "name": name, "category": category, "date": new_date, "start_time": start,
+            "end_time": end, "priority": priority, "comment": comment, "recurrence": recurrence,
+        }
+        if start is None or end is None:
+            st.error("Enter a start time and an end time.")
+            return
+        try:
+            if scope == "This and all future occurrences":
+                t.pet.edit_series(t, updates)
+            elif recurring:
+                t.pet.edit_occurrence(t, updates)
+            else:
+                t.pet.edit_task(t, updates)
+        except ValueError as e:
+            st.error(str(e))
+            return
+        st.session_state.notice = f"Saved '{t.name}'."
+        st.session_state.edit_warnings = Scheduler(owner).warnings_for(t)
+        close_panel()
+        st.rerun()
+
+
+def delete_panel(t: Task) -> None:
+    """Show the delete confirmation for a task, directly under its row."""
+    pet = t.pet
+    with st.container(border=True):
+        st.write(f"Delete '{t.name}' ({pet.name}) on {t.date.strftime('%a, %b %d')}?")
+        if t.recurrence == "none":
+            confirm_col, cancel_col = st.columns(2)
+            if confirm_col.button("Delete", key=f"confirm_delete_{t.id}"):
+                pet.remove_task(t)
+                st.session_state.notice = f"Deleted '{t.name}'."
+                close_panel()
+                st.rerun()
+        else:
+            one_col, all_col, cancel_col = st.columns(3)
+            if one_col.button("This occurrence only", key=f"delete_one_{t.id}"):
+                follow_up = pet.skip_task(t)
+                st.session_state.notice = (
+                    f"Deleted '{t.name}' on {t.date.strftime('%b %d')}; "
+                    f"next one is {follow_up.date.strftime('%b %d')}."
+                )
+                close_panel()
+                st.rerun()
+            if all_col.button("This and all future", key=f"delete_all_{t.id}"):
+                removed = pet.remove_series(t)
+                st.session_state.notice = f"Deleted '{t.name}' and {removed - 1} later occurrence(s)."
+                close_panel()
+                st.rerun()
+        if cancel_col.button("Cancel", key=f"cancel_delete_{t.id}"):
+            close_panel()
+            st.rerun()
+
+
 if "notice" in st.session_state:
     st.toast(st.session_state.pop("notice"))
+for message in st.session_state.pop("edit_warnings", []):
+    st.warning(message)
 
 scheduler = Scheduler(owner)
 day_plan = scheduler.daily_plan(plan_date)
@@ -190,11 +301,14 @@ if not day_plan:
 else:
     st.write(f"Schedule for {plan_date.strftime('%A, %B %d, %Y')}:")
     if plan:
-        widths = [1.6, 2.3, 2.3, 1.6, 1.6, 0.9]
-        for col, label in zip(st.columns(widths), ["Status", "Time", "Task", "Pet", "Category", "Priority"]):
+        widths = [1.5, 2.2, 2.2, 1.5, 1.5, 0.9, 0.5, 0.5]
+        labels = ["Status", "Time", "Task", "Pet", "Category", "Priority", "", ""]
+        for col, label in zip(st.columns(widths), labels):
             col.markdown(f"**{label}**")
+        open_kind, open_id = st.session_state.get("panel", (None, None))
         for t in plan:
-            status_col, time_col, task_col, pet_col, category_col, priority_col = st.columns(widths)
+            (status_col, time_col, task_col, pet_col, category_col,
+             priority_col, edit_col, delete_col) = st.columns(widths)
             if t.is_complete(plan_date):
                 status_col.write("Done ✓")
             else:
@@ -211,6 +325,17 @@ else:
             pet_col.write(t.pet.name)
             category_col.write(t.category)
             priority_col.write(t.priority)
+            edit_col.button(
+                "✏️", key=f"edit_{t.id}", help="Edit task", on_click=open_panel, args=("edit", t)
+            )
+            delete_col.button(
+                "🗑️", key=f"delete_{t.id}", help="Delete task", on_click=open_panel, args=("delete", t)
+            )
+            if open_id == t.id:
+                if open_kind == "edit":
+                    edit_panel(t)
+                elif open_kind == "delete":
+                    delete_panel(t)
     else:
         st.info("No tasks match the selected filters.")
 
