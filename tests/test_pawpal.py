@@ -494,6 +494,40 @@ def test_edit_or_delete_clears_conflict_warning():
     assert scheduler.conflict_warnings(DAY) == []
 
 
+def test_edit_info_updates_pet_and_keeps_its_tasks():
+    pet = make_pet()
+    pet.add_task(make_task())
+
+    pet.edit_info("  Biscuit ", "dog", 5)
+
+    assert (pet.name, pet.pet_type, pet.age) == ("Biscuit", "dog", 5)
+    assert len(pet.get_tasks()) == 1
+    assert pet.get_tasks()[0].pet is pet
+
+
+def test_edit_info_rejects_blank_name_and_negative_age_without_changing_pet():
+    pet = make_pet()
+
+    with pytest.raises(ValueError):
+        pet.edit_info("   ", "dog", 5)
+    with pytest.raises(ValueError):
+        pet.edit_info("Biscuit", "dog", -1)
+
+    assert (pet.name, pet.pet_type, pet.age) == ("Princess Donut", "Cat", 3)
+
+
+def test_edit_info_rejects_another_pets_name_but_allows_own_name():
+    owner = PawPal().add_owner("Ana")
+    donut = owner.add_pet("Princess Donut", "cat", 3)
+    owner.add_pet("Mongo", "dog", 1)
+
+    with pytest.raises(ValueError):
+        donut.edit_info("mongo", "cat", 3)  # duplicate, ignoring case
+
+    donut.edit_info("princess donut", "cat", 4)  # re-casing its own name is fine
+    assert (donut.name, donut.age) == ("princess donut", 4)
+
+
 def test_adding_task_increases_pet_task_count():
     pet = make_pet()
     assert len(pet.get_tasks()) == 0

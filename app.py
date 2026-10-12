@@ -5,6 +5,20 @@ from pawpal_system import PawPal, Owner, Pet, Task, Schedule, Scheduler
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="wide")
 
+# Wide layout fits the schedule columns, but on a big screen it stretches them too far apart.
+st.markdown(
+    "<style>[data-testid='stMainBlockContainer'] {max-width: 1200px;}</style>",
+    unsafe_allow_html=True,
+)
+
+
+def table_header(widths: list, labels: list) -> None:
+    """Draw a header row for a table made of columns (blank labels leave the cell empty)."""
+    for col, label in zip(st.columns(widths), labels):
+        if label:
+            col.markdown(f"**{label}**")
+
+
 st.title("🐾 PawPal+")
 
 st.markdown(
@@ -63,7 +77,8 @@ owner = st.session_state.owner
 st.write(f"Owner: **{owner.name}**")
 
 pet_name = st.text_input("Pet name", key="pet_name_input")
-species = st.selectbox("Species", ["dog", "cat", "other"])
+SPECIES = ["dog", "cat", "other"]
+species = st.selectbox("Species", SPECIES)
 age = st.number_input("Age", min_value=0, max_value=40, value=None, step=1)
 
 if st.button("Add pet"):
@@ -75,14 +90,57 @@ if st.button("Add pet"):
         except ValueError as e:
             st.error(str(e))
 
+def open_pet_panel(index: int, pet: Pet) -> None:
+    """Button callback: open the edit form for one pet, loaded with its current values."""
+    st.session_state.pet_panel = index
+    st.session_state[f"pet_edit_name_{index}"] = pet.name
+    st.session_state[f"pet_edit_type_{index}"] = pet.pet_type
+    st.session_state[f"pet_edit_age_{index}"] = pet.age
+
+
+def pet_edit_panel(index: int, pet: Pet) -> None:
+    """Show the edit form for a pet, directly under its row."""
+    types = SPECIES if pet.pet_type in SPECIES else SPECIES + [pet.pet_type]
+    with st.form(f"pet_edit_form_{index}"):
+        new_name = st.text_input("Pet name", key=f"pet_edit_name_{index}")
+        new_type = st.selectbox("Species", types, key=f"pet_edit_type_{index}")
+        new_age = st.number_input("Age", min_value=0, max_value=40, step=1, key=f"pet_edit_age_{index}")
+        save_col, cancel_col = st.columns(2)
+        save = save_col.form_submit_button("Save")
+        cancel = cancel_col.form_submit_button("Cancel")
+
+    if cancel:
+        st.session_state.pop("pet_panel", None)
+        st.rerun()
+    if save:
+        old_name = pet.name
+        try:
+            pet.edit_info(new_name, new_type, int(new_age))
+        except ValueError as e:
+            st.error(str(e))
+            return
+        if st.session_state.get("pet_filter") == old_name:  # keep the schedule filter on this pet
+            st.session_state.pet_filter = pet.name
+        st.session_state.notice = f"Saved {pet.name}'s info."
+        st.session_state.pop("pet_panel", None)
+        st.rerun()
+
+
 if owner.get_pets():
     st.write(f"{owner.name}'s pets:")
-    st.table(
-        [
-            {"Name": p.name, "Type": p.pet_type.title(), "Age": p.age}
-            for p in owner.get_pets()
-        ]
-    )
+    pet_widths = [3, 2, 1, 1]
+    table_header(pet_widths, ["Name", "Type", "Age", ""])
+    for index, p in enumerate(owner.get_pets()):
+        with st.container(border=True):
+            name_col, type_col, age_col, edit_col = st.columns(pet_widths, vertical_alignment="center")
+            name_col.write(p.name)
+            type_col.write(p.pet_type.title())
+            age_col.write(str(p.age))
+            edit_col.button(
+                "✏️", key=f"edit_pet_{index}", help="Edit pet", on_click=open_pet_panel, args=(index, p)
+            )
+            if st.session_state.get("pet_panel") == index:
+                pet_edit_panel(index, p)
 else:
     st.info("No pets yet. Add one above.")
 
@@ -138,6 +196,7 @@ if all_tasks:
     st.table(
         [
             {
+                "Status": "Done ✓" if t.is_complete() else "Pending",
                 "Pet": t.pet.name,
                 "Task": t.name,
                 "Category": t.category,
@@ -157,9 +216,13 @@ st.divider()
 st.subheader("Build Schedule")
 plan_date = st.date_input("Schedule for", value=date.today(), key="plan_date")
 
+pet_options = ["All pets"] + list(pets_by_name)
+if st.session_state.get("pet_filter", "All pets") not in pet_options:
+    st.session_state.pet_filter = "All pets"  # the filtered pet no longer exists under that name
+
 filter_col1, filter_col2 = st.columns(2)
 with filter_col1:
-    pet_choice = st.selectbox("Show pet", ["All pets"] + list(pets_by_name), key="pet_filter")
+    pet_choice = st.selectbox("Show pet", pet_options, key="pet_filter")
 with filter_col2:
     status_choice = st.selectbox("Show status", ["All", "Pending", "Done"], key="status_filter")
 
@@ -301,41 +364,40 @@ if not day_plan:
 else:
     st.write(f"Schedule for {plan_date.strftime('%A, %B %d, %Y')}:")
     if plan:
-        widths = [1.5, 2.2, 2.2, 1.5, 1.5, 0.9, 0.5, 0.5]
-        labels = ["Status", "Time", "Task", "Pet", "Category", "Priority", "", ""]
-        for col, label in zip(st.columns(widths), labels):
-            col.markdown(f"**{label}**")
+        widths = [1.4, 2.0, 2.0, 1.4, 1.3, 0.9, 0.8, 0.8]
+        table_header(widths, ["Status", "Time", "Task", "Pet", "Category", "Priority", "", ""])
         open_kind, open_id = st.session_state.get("panel", (None, None))
         for t in plan:
-            (status_col, time_col, task_col, pet_col, category_col,
-             priority_col, edit_col, delete_col) = st.columns(widths)
-            if t.is_complete(plan_date):
-                status_col.write("Done ✓")
-            else:
-                status_col.button(
-                    "Mark done",
-                    key=f"done_{t.id}",
-                    on_click=complete_task,
-                    args=(t, plan_date),
+            with st.container(border=True):
+                (status_col, time_col, task_col, pet_col, category_col,
+                 priority_col, edit_col, delete_col) = st.columns(widths, vertical_alignment="center")
+                if t.is_complete(plan_date):
+                    status_col.write("Done ✓")
+                else:
+                    status_col.button(
+                        "Mark done",
+                        key=f"done_{t.id}",
+                        on_click=complete_task,
+                        args=(t, plan_date),
+                    )
+                time_col.write(f"{t.start_time:%I:%M %p} - {t.end_time:%I:%M %p}")
+                task_col.write(t.name)
+                if t.comment:
+                    task_col.caption(t.comment)
+                pet_col.write(t.pet.name)
+                category_col.write(t.category)
+                priority_col.write(str(t.priority))
+                edit_col.button(
+                    "✏️", key=f"edit_{t.id}", help="Edit task", on_click=open_panel, args=("edit", t)
                 )
-            time_col.write(f"{t.start_time:%I:%M %p} - {t.end_time:%I:%M %p}")
-            task_col.write(t.name)
-            if t.comment:
-                task_col.caption(t.comment)
-            pet_col.write(t.pet.name)
-            category_col.write(t.category)
-            priority_col.write(t.priority)
-            edit_col.button(
-                "✏️", key=f"edit_{t.id}", help="Edit task", on_click=open_panel, args=("edit", t)
-            )
-            delete_col.button(
-                "🗑️", key=f"delete_{t.id}", help="Delete task", on_click=open_panel, args=("delete", t)
-            )
-            if open_id == t.id:
-                if open_kind == "edit":
-                    edit_panel(t)
-                elif open_kind == "delete":
-                    delete_panel(t)
+                delete_col.button(
+                    "🗑️", key=f"delete_{t.id}", help="Delete task", on_click=open_panel, args=("delete", t)
+                )
+                if open_id == t.id:
+                    if open_kind == "edit":
+                        edit_panel(t)
+                    elif open_kind == "delete":
+                        delete_panel(t)
     else:
         st.info("No tasks match the selected filters.")
 
