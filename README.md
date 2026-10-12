@@ -103,17 +103,127 @@ Paste a sample of your app's CLI or Streamlit output here so a reader can see wh
 
 ```bash
 # Run the full test suite:
-pytest
+python -m pytest
 
-# Run with coverage:
-pytest --cov
+# `-v` to list every test by name:
+python -m pytest -v
 ```
 
-Sample test output:
+### What the tests cover
+
+The suite in `tests/test_pawpal.py` has 82 tests covering the core scheduling logic:
+
+- **Sorting:** the daily plan comes back in chronological order across all pets. Tasks can also be sorted by priority (highest first) or duration (shortest first), with ties broken by start time. Tasks from other dates are excluded, and an unknown sort key raises an error.
+- **Recurring tasks:** completing a daily, weekly or monthly task creates the next occurrence once and never twice. The date rolls over correctly at month, year and leap-day boundaries. Follow-ups keep the task's details and series, and completion is tracked per date.
+- **Conflict detection:** overlapping tasks are flagged across pets. A same-pet overlap or a different-category overlap is a `Conflict`. Different pets doing the same category is a softer `Heads-up`. Back-to-back tasks are not flagged. Three-way and nested overlaps are handled. Tasks at the same time on different dates don't conflict.
+- **Filtering:** the day's tasks can be filtered by pet, status, category and length, alone or combined, including boundary lengths and empty results.
+- **Editing and deleting:** edits roll back if invalid. Recurring tasks can be changed or deleted for one occurrence or for the whole series.
+- **Time remaining:** overlapping tasks are counted once, back-to-back tasks in full, and an overbooked day gives a negative number.
+
+
+### Sample Output:
 
 ```
-# Paste your pytest output here
+ python -m pytest -v
+========================================================= test session starts =========================================================
+platform win32 -- Python 3.14.7, pytest-9.1.1, pluggy-1.6.0 -- 
+testpaths: tests
+plugins: anyio-4.15.1
+collected 82 items
+
+tests/test_pawpal.py::test_mark_complete_changes_task_status PASSED                                                              [  1%]
+tests/test_pawpal.py::test_next_date_uses_recurrence_interval PASSED                                                             [  2%]
+tests/test_pawpal.py::test_task_occurs_only_on_its_own_date PASSED                                                               [  3%]
+tests/test_pawpal.py::test_completing_recurring_task_creates_next_occurrence PASSED                                              [  4%]
+tests/test_pawpal.py::test_mark_complete_directly_creates_next_occurrence PASSED                                                 [  6%]
+tests/test_pawpal.py::test_mark_complete_on_task_without_pet_creates_nothing PASSED                                              [  7%]
+tests/test_pawpal.py::test_completing_non_recurring_task_creates_nothing PASSED                                                  [  8%]
+tests/test_pawpal.py::test_completing_twice_does_not_duplicate_next_occurrence PASSED                                            [  9%]
+tests/test_pawpal.py::test_filter_without_filters_returns_whole_day_in_time_order PASSED                                         [ 10%]
+tests/test_pawpal.py::test_filter_by_pet PASSED                                                                                  [ 12%]
+tests/test_pawpal.py::test_filter_by_status PASSED                                                                               [ 13%]
+tests/test_pawpal.py::test_filter_by_pet_and_status PASSED                                                                       [ 14%]
+tests/test_pawpal.py::test_filter_by_category PASSED                                                                             [ 15%]
+tests/test_pawpal.py::test_filter_by_duration_buckets_use_the_documented_boundaries PASSED                                       [ 17%]
+tests/test_pawpal.py::test_filter_by_duration_without_bounds_returns_everything PASSED                                           [ 18%]
+tests/test_pawpal.py::test_filter_by_duration_with_impossible_range_returns_empty_list PASSED                                    [ 19%]
+tests/test_pawpal.py::test_filter_by_duration_combines_with_other_filters PASSED                                                 [ 20%]
+tests/test_pawpal.py::test_filter_unknown_pet_returns_empty_list PASSED                                                          [ 21%]
+tests/test_pawpal.py::test_filter_rejects_invalid_status PASSED                                                                  [ 23%]
+tests/test_pawpal.py::test_filter_status_is_per_date PASSED                                                                      [ 24%]
+tests/test_pawpal.py::test_no_overlap_means_no_warnings PASSED                                                                   [ 25%]
+tests/test_pawpal.py::test_no_tasks_means_no_warnings PASSED                                                                     [ 26%]
+tests/test_pawpal.py::test_same_pet_overlap_is_a_conflict PASSED                                                                 [ 28%]
+tests/test_pawpal.py::test_different_pets_different_categories_is_a_conflict PASSED                                              [ 29%]
+tests/test_pawpal.py::test_different_pets_same_category_is_a_heads_up PASSED                                                     [ 30%]
+tests/test_pawpal.py::test_same_pet_same_category_is_still_a_conflict PASSED                                                     [ 31%]
+tests/test_pawpal.py::test_find_conflicts_pairs_every_overlap PASSED                                                             [ 32%]
+tests/test_pawpal.py::test_warnings_for_new_task_lists_only_its_overlaps PASSED                                                  [ 34%]
+tests/test_pawpal.py::test_warnings_for_task_without_overlap_is_empty_and_does_not_raise PASSED                                  [ 35%]
+tests/test_pawpal.py::test_follow_up_shares_series_id_but_other_tasks_do_not PASSED                                              [ 36%]
+tests/test_pawpal.py::test_edit_task_updates_fields_and_rolls_back_when_invalid PASSED                                           [ 37%]
+tests/test_pawpal.py::test_editing_date_or_time_of_completed_task_makes_it_pending PASSED                                        [ 39%]
+tests/test_pawpal.py::test_editing_other_fields_of_completed_task_keeps_it_done PASSED                                           [ 40%]
+tests/test_pawpal.py::test_edit_with_same_date_keeps_completed_task_done PASSED                                                  [ 41%]
+tests/test_pawpal.py::test_uncompleting_by_edit_then_completing_again_does_not_duplicate_follow_up PASSED                        [ 42%]
+tests/test_pawpal.py::test_edit_occurrence_leaves_next_occurrence_unchanged PASSED                                               [ 43%]
+tests/test_pawpal.py::test_edit_occurrence_on_already_followed_task_does_not_duplicate PASSED                                    [ 45%]
+tests/test_pawpal.py::test_invalid_edit_occurrence_rolls_back_and_creates_nothing PASSED                                         [ 46%]
+tests/test_pawpal.py::test_edit_series_changes_this_and_later_but_not_earlier_or_other_series PASSED                             [ 47%]
+tests/test_pawpal.py::test_edit_series_date_only_changes_this_occurrence PASSED                                                  [ 48%]
+tests/test_pawpal.py::test_skip_task_removes_occurrence_and_keeps_series_going PASSED                                            [ 50%]
+tests/test_pawpal.py::test_skip_task_returns_existing_next_occurrence_without_duplicating PASSED                                 [ 51%]
+tests/test_pawpal.py::test_skip_non_recurring_task_just_removes_it PASSED                                                        [ 52%]
+tests/test_pawpal.py::test_remove_series_removes_this_and_later_only PASSED                                                      [ 53%]
+tests/test_pawpal.py::test_remove_task_removes_only_that_instance PASSED                                                         [ 54%]
+tests/test_pawpal.py::test_edit_or_delete_clears_conflict_warning PASSED                                                         [ 56%]
+tests/test_pawpal.py::test_edit_info_updates_pet_and_keeps_its_tasks PASSED                                                      [ 57%]
+tests/test_pawpal.py::test_edit_info_rejects_blank_name_and_negative_age_without_changing_pet PASSED                             [ 58%]
+tests/test_pawpal.py::test_edit_info_rejects_another_pets_name_but_allows_own_name PASSED                                        [ 59%]
+tests/test_pawpal.py::test_remaining_minutes_on_empty_day_is_all_available_time PASSED                                           [ 60%]
+tests/test_pawpal.py::test_remaining_minutes_adds_separate_tasks PASSED                                                          [ 62%]
+tests/test_pawpal.py::test_remaining_minutes_counts_identical_overlap_once PASSED                                                [ 63%]
+tests/test_pawpal.py::test_remaining_minutes_counts_partial_overlap_as_one_block PASSED                                          [ 64%]
+tests/test_pawpal.py::test_remaining_minutes_ignores_task_nested_inside_another PASSED                                           [ 65%]
+tests/test_pawpal.py::test_remaining_minutes_counts_back_to_back_tasks_in_full PASSED                                            [ 67%]
+tests/test_pawpal.py::test_remaining_minutes_merges_a_chain_of_overlaps PASSED                                                   [ 68%]
+tests/test_pawpal.py::test_remaining_minutes_goes_negative_when_overbooked PASSED                                                [ 69%]
+tests/test_pawpal.py::test_remaining_minutes_counts_simultaneous_tasks_for_two_pets_once PASSED                                  [ 70%]
+tests/test_pawpal.py::test_remaining_minutes_ignores_tasks_on_other_dates PASSED                                                 [ 71%]
+tests/test_pawpal.py::test_busy_minutes_handles_unsorted_tasks PASSED                                                            [ 73%]
+tests/test_pawpal.py::test_adding_task_increases_pet_task_count PASSED                                                           [ 74%]
+tests/test_pawpal.py::test_daily_plan_is_in_chronological_order_across_pets PASSED                                               [ 75%]
+tests/test_pawpal.py::test_sort_by_priority_is_highest_first_with_ties_by_time PASSED                                            [ 76%]
+tests/test_pawpal.py::test_sort_by_duration_is_shortest_first_with_ties_by_time PASSED                                           [ 78%]
+tests/test_pawpal.py::test_sort_excludes_tasks_from_other_dates PASSED                                                           [ 79%]
+tests/test_pawpal.py::test_sort_rejects_unknown_sort_key PASSED                                                                  [ 80%]
+tests/test_pawpal.py::test_sort_on_empty_day_returns_empty_list PASSED                                                           [ 81%]
+tests/test_pawpal.py::test_pet_get_tasks_sorts_by_date_then_start_time PASSED                                                    [ 82%]
+tests/test_pawpal.py::test_follow_up_date_crosses_month_and_year_boundaries[daily-start0-expected0] PASSED                       [ 84%]
+tests/test_pawpal.py::test_follow_up_date_crosses_month_and_year_boundaries[daily-start1-expected1] PASSED                       [ 85%]
+tests/test_pawpal.py::test_follow_up_date_crosses_month_and_year_boundaries[daily-start2-expected2] PASSED                       [ 86%]
+tests/test_pawpal.py::test_follow_up_date_crosses_month_and_year_boundaries[weekly-start3-expected3] PASSED                      [ 87%]
+tests/test_pawpal.py::test_follow_up_date_crosses_month_and_year_boundaries[monthly-start4-expected4] PASSED                     [ 89%]
+tests/test_pawpal.py::test_completing_a_date_the_task_does_not_occur_on_raises_and_changes_nothing PASSED                        [ 90%]
+tests/test_pawpal.py::test_follow_up_copies_category_priority_and_end_time PASSED                                                [ 91%]
+tests/test_pawpal.py::test_completing_each_follow_up_keeps_the_chain_going PASSED                                                [ 92%]
+tests/test_pawpal.py::test_completing_recurring_task_does_not_mark_follow_up_done PASSED                                         [ 93%]
+tests/test_pawpal.py::test_three_way_overlap_reports_all_three_pairs PASSED                                                      [ 95%]
+tests/test_pawpal.py::test_same_time_on_different_dates_is_not_a_conflict PASSED                                                 [ 96%]
+tests/test_pawpal.py::test_identical_times_for_same_pet_is_a_conflict PASSED                                                     [ 97%]
+tests/test_pawpal.py::test_task_nested_inside_another_is_a_conflict PASSED                                                       [ 98%]
+tests/test_pawpal.py::test_warnings_for_ignores_back_to_back_and_never_lists_the_task_against_itself PASSED                      [100%]
+
+========================================================= 82 passed in 0.28s ==========================================================
 ```
+
+### Confidence Level 
+⭐⭐⭐⭐½ (4.5 / 5)
+
+All 82 tests pass, and they cover the core behaviors that matter most for a scheduler: sorting, recurring tasks and conflict detection. They also cover the edge cases around them: month, year and leap-day rollovers, back-to-back versus overlapping tasks, three-way and nested overlaps, and invalid edits that must roll back.
+
+I'm holding back half a star because I do believe that one of the best ways to test behavior is to run the application and try different scenarios on the app itself.
+
 
 ## 📐 Smarter Scheduling
 

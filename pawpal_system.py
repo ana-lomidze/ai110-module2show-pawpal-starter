@@ -3,7 +3,6 @@ PawPal+ logic layer:
 core classes for the app (PawPal), owners, pets, schedules, tasks, and scheduling.
 """
 
-import calendar
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 from typing import ClassVar, Dict, List, Optional, Set, Tuple
@@ -245,26 +244,6 @@ class Schedule:
                 continue
             results.append(t)
         return results
-
-    def daily_display(self, date: date) -> List[Task]:
-        """Return the tasks occurring on the given date, sorted by start time."""
-        return sorted(
-            (t for t in self.tasks if t.occurs_on(date)),
-            key=lambda t: t.start_time,
-        )
-
-    def weekly_display(self, start_date: date) -> Dict[date, List[Task]]:
-        """Return a day-to-tasks mapping for the seven days starting at start_date."""
-        days = [start_date + timedelta(days=i) for i in range(7)]
-        return {day: self.daily_display(day) for day in days}
-
-    def monthly_display(self, month: int, year: int) -> Dict[date, List[Task]]:
-        """Return a day-to-tasks mapping for every day of the given month."""
-        if not 1 <= month <= 12:
-            raise ValueError("Month must be between 1 and 12")
-        days_in_month = calendar.monthrange(year, month)[1]
-        days = [date(year, month, d) for d in range(1, days_in_month + 1)]
-        return {day: self.daily_display(day) for day in days}
 
 
 @dataclass

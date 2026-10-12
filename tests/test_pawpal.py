@@ -644,3 +644,168 @@ def test_adding_task_increases_pet_task_count():
     pet.add_task(make_task())
 
     assert len(pet.get_tasks()) == 1
+
+
+# ---------- Sorting ----------
+
+def make_sorting_scheduler():
+    """Tasks added deliberately out of order, across two pets, plus one on another day."""
+    owner = PawPal().add_owner("Ana")
+    donut = owner.add_pet("Princess Donut", "cat", 3)
+    mongo = owner.add_pet("Mongo", "dog", 1)
+    donut.add_task(make_task(name="Late", start_time=time(18, 0), end_time=time(18, 15), priority=2))
+    mongo.add_task(make_task(name="Early", start_time=time(7, 0), end_time=time(8, 30), priority=5))
+    donut.add_task(make_task(name="Mid", start_time=time(12, 0), end_time=time(12, 45), priority=5))
+    mongo.add_task(make_task(name="Tomorrow", date=date(2026, 10, 12), start_time=time(6, 0), end_time=time(6, 10)))
+    return Scheduler(owner)
+
+
+def test_daily_plan_is_in_chronological_order_across_pets():
+    plan = make_sorting_scheduler().daily_plan(DAY)
+
+    assert [t.name for t in plan] == ["Early", "Mid", "Late"]
+
+
+def test_sort_by_priority_is_highest_first_with_ties_by_time():
+    result = make_sorting_scheduler().sort_tasks(DAY, "priority")
+
+    assert [t.name for t in result] == ["Early", "Mid", "Late"]  # 5, 5 (earlier first), 2
+
+
+def test_sort_by_duration_is_shortest_first_with_ties_by_time():
+    result = make_sorting_scheduler().sort_tasks(DAY, "duration")
+
+    assert [t.name for t in result] == ["Late", "Mid", "Early"]  # 15, 45, 90 min
+
+
+def test_sort_excludes_tasks_from_other_dates():
+    scheduler = make_sorting_scheduler()
+
+    assert "Tomorrow" not in [t.name for t in scheduler.sort_tasks(DAY, "time")]
+    assert [t.name for t in scheduler.sort_tasks(date(2026, 10, 12), "time")] == ["Tomorrow"]
+
+
+def test_sort_rejects_unknown_sort_key():
+    with pytest.raises(ValueError):
+        make_sorting_scheduler().sort_tasks(DAY, "alphabet")
+
+
+def test_sort_on_empty_day_returns_empty_list():
+    scheduler, _, _ = make_conflict_setup()
+
+    assert scheduler.daily_plan(DAY) == []
+
+
+def test_pet_get_tasks_sorts_by_date_then_start_time():
+    pet = make_pet()
+    pet.add_task(make_task(name="D2 early", date=date(2026, 10, 12), start_time=time(7, 0), end_time=time(7, 30)))
+    pet.add_task(make_task(name="D1 late", start_time=time(20, 0), end_time=time(20, 30)))
+    pet.add_task(make_task(name="D1 early", start_time=time(6, 0), end_time=time(6, 30)))
+
+    assert [t.name for t in pet.get_tasks()] == ["D1 early", "D1 late", "D2 early"]
+
+
+# ---------- Recurrence edge cases ----------
+
+@pytest.mark.parametrize("recurrence, start, expected", [
+    ("daily", date(2026, 10, 31), date(2026, 11, 1)),    # month boundary
+    ("daily", date(2026, 12, 31), date(2027, 1, 1)),     # year boundary
+    ("daily", date(2028, 2, 28), date(2028, 2, 29)),     # leap day
+    ("weekly", date(2026, 12, 28), date(2027, 1, 4)),
+    ("monthly", date(2026, 10, 11), date(2026, 11, 10)),  # documented as 30 days
+])
+def test_follow_up_date_crosses_month_and_year_boundaries(recurrence, start, expected):
+    pet = make_pet()
+    task = make_task(date=start, recurrence=recurrence)
+    pet.add_task(task)
+
+    assert task.mark_complete().date == expected
+
+
+def test_completing_a_date_the_task_does_not_occur_on_raises_and_changes_nothing():
+    pet, task = pet_with_daily_task()
+
+    with pytest.raises(ValueError):
+        task.mark_complete(on=date(2026, 10, 15))
+
+    assert task.is_complete() is False
+    assert len(pet.get_tasks()) == 1
+
+
+def test_follow_up_copies_category_priority_and_end_time():
+    pet = make_pet()
+    task = make_task(category="meds", priority=2, end_time=time(9, 45), recurrence="daily")
+    pet.add_task(task)
+
+    follow_up = task.mark_complete()
+
+    assert (follow_up.category, follow_up.priority, follow_up.end_time) == ("meds", 2, time(9, 45))
+
+
+def test_completing_each_follow_up_keeps_the_chain_going():
+    pet, task = pet_with_daily_task()
+
+    second = task.mark_complete()
+    third = second.mark_complete()
+
+    assert dates_of(pet) == [date(2026, 10, 11), date(2026, 10, 12), date(2026, 10, 13)]
+    assert third.series_id == task.series_id
+
+
+def test_completing_recurring_task_does_not_mark_follow_up_done():
+    pet, task = pet_with_daily_task()
+
+    follow_up = task.mark_complete()
+
+    assert Scheduler(pet.owner).filter_tasks(follow_up.date, status="pending") == [follow_up]
+
+
+# ---------- Conflict edge cases ----------
+
+def test_three_way_overlap_reports_all_three_pairs():
+    scheduler, donut, mongo = make_conflict_setup()
+    donut.add_task(make_task(name="A", category="walk", start_time=time(9, 0), end_time=time(11, 0)))
+    mongo.add_task(make_task(name="B", category="meds", start_time=time(9, 30), end_time=time(10, 30)))
+    donut.add_task(make_task(name="C", category="grooming", start_time=time(10, 0), end_time=time(10, 15)))
+
+    pairs = {frozenset((a.name, b.name)) for a, b in scheduler.find_conflicts(DAY)}
+
+    assert pairs == {frozenset("AB"), frozenset("AC"), frozenset("BC")}
+
+
+def test_same_time_on_different_dates_is_not_a_conflict():
+    scheduler, donut, mongo = make_conflict_setup()
+    donut.add_task(make_task(name="Today", category="walk"))
+    mongo.add_task(make_task(name="Tomorrow", category="meds", date=date(2026, 10, 12)))
+
+    assert scheduler.conflict_warnings(DAY) == []
+    assert scheduler.conflict_warnings(date(2026, 10, 12)) == []
+
+
+def test_identical_times_for_same_pet_is_a_conflict():
+    scheduler, donut, _ = make_conflict_setup()
+    donut.add_task(make_task(name="One", category="walk"))
+    donut.add_task(make_task(name="Two", category="meds"))
+
+    assert len(scheduler.find_conflicts(DAY)) == 1
+
+
+def test_task_nested_inside_another_is_a_conflict():
+    scheduler, donut, _ = make_conflict_setup()
+    donut.add_task(make_task(name="Outer", category="walk", start_time=time(9, 0), end_time=time(12, 0)))
+    donut.add_task(make_task(name="Inner", category="meds", start_time=time(10, 0), end_time=time(10, 30)))
+
+    (message,) = scheduler.conflict_warnings(DAY)
+
+    assert "10:00 AM - 10:30 AM" in message
+
+
+def test_warnings_for_ignores_back_to_back_and_never_lists_the_task_against_itself():
+    scheduler, donut, mongo = make_conflict_setup()
+    first = make_task(name="First", start_time=time(9, 0), end_time=time(9, 30))
+    second = make_task(name="Second", category="walk", start_time=time(9, 30), end_time=time(10, 0))
+    donut.add_task(first)
+    mongo.add_task(second)
+
+    assert scheduler.warnings_for(first) == []
+    assert scheduler.warnings_for(second) == []
