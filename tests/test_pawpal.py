@@ -1,4 +1,4 @@
-from datetime import date, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 import pytest
 
@@ -161,6 +161,50 @@ def test_filter_by_category():
     tasks = make_two_pet_scheduler().filter_tasks(DAY, category="feeding")
 
     assert names(tasks) == [("Princess Donut", "Breakfast"), ("Mongo", "Breakfast")]
+
+
+def make_duration_scheduler():
+    """One pet with tasks of 15, 30, 45, 60 and 90 minutes on 2026-10-11."""
+    owner = PawPal().add_owner("Ana")
+    pet = owner.add_pet("Mongo", "dog", 1)
+    for name, minutes in [("A", 15), ("B", 30), ("C", 45), ("D", 60), ("E", 90)]:
+        start = datetime.combine(DAY, time(8, 0))
+        pet.add_task(make_task(
+            name=name, start_time=start.time(), end_time=(start + timedelta(minutes=minutes)).time()
+        ))
+    return Scheduler(owner)
+
+
+def test_filter_by_duration_buckets_use_the_documented_boundaries():
+    scheduler = make_duration_scheduler()
+
+    short = scheduler.filter_tasks(DAY, at_most=30)
+    medium = scheduler.filter_tasks(DAY, longer_than=30, at_most=60)
+    long_ = scheduler.filter_tasks(DAY, longer_than=60)
+
+    assert sorted(t.name for t in short) == ["A", "B"]  # 30 counts as short
+    assert sorted(t.name for t in medium) == ["C", "D"]  # 60 counts as medium
+    assert [t.name for t in long_] == ["E"]
+
+
+def test_filter_by_duration_without_bounds_returns_everything():
+    assert len(make_duration_scheduler().filter_tasks(DAY)) == 5
+
+
+def test_filter_by_duration_with_impossible_range_returns_empty_list():
+    assert make_duration_scheduler().filter_tasks(DAY, longer_than=60, at_most=30) == []
+
+
+def test_filter_by_duration_combines_with_other_filters():
+    scheduler = make_two_pet_scheduler()  # Breakfasts are 30 min, Walk and Vet are 60 min
+
+    tasks = scheduler.filter_tasks(DAY, pet_name="Mongo", at_most=30)
+
+    assert names(tasks) == [("Mongo", "Breakfast")]
+    assert names(scheduler.filter_tasks(DAY, longer_than=30, status="pending")) == [
+        ("Mongo", "Walk"),
+        ("Princess Donut", "Vet Visit"),
+    ]
 
 
 def test_filter_unknown_pet_returns_empty_list():
@@ -526,6 +570,71 @@ def test_edit_info_rejects_another_pets_name_but_allows_own_name():
 
     donut.edit_info("princess donut", "cat", 4)  # re-casing its own name is fine
     assert (donut.name, donut.age) == ("princess donut", 4)
+
+
+def remaining_after(*slots, available=480, pets=1, day=DAY):
+    """Add one task per (start, end) slot to a new owner's pet and return remaining_minutes(day)."""
+    owner = PawPal().add_owner("Ana")
+    owner.daily_available_minutes = available
+    pet_list = [owner.add_pet(f"Pet{i}", "dog", 1) for i in range(pets)]
+    for i, (start, end) in enumerate(slots):
+        pet_list[i % pets].add_task(make_task(name=f"Task{i}", start_time=start, end_time=end))
+    return Scheduler(owner).remaining_minutes(day)
+
+
+def test_remaining_minutes_on_empty_day_is_all_available_time():
+    assert remaining_after() == 480
+
+
+def test_remaining_minutes_adds_separate_tasks():
+    assert remaining_after((time(9, 0), time(9, 30)), (time(10, 0), time(11, 0))) == 390
+
+
+def test_remaining_minutes_counts_identical_overlap_once():
+    assert remaining_after((time(9, 0), time(9, 30)), (time(9, 0), time(9, 30))) == 450
+
+
+def test_remaining_minutes_counts_partial_overlap_as_one_block():
+    assert remaining_after((time(9, 0), time(9, 30)), (time(9, 15), time(10, 0))) == 420
+
+
+def test_remaining_minutes_ignores_task_nested_inside_another():
+    assert remaining_after((time(9, 0), time(11, 0)), (time(9, 30), time(10, 0))) == 360
+
+
+def test_remaining_minutes_counts_back_to_back_tasks_in_full():
+    assert remaining_after((time(9, 0), time(9, 30)), (time(9, 30), time(10, 0))) == 420
+
+
+def test_remaining_minutes_merges_a_chain_of_overlaps():
+    slots = (
+        (time(9, 0), time(10, 0)),
+        (time(9, 30), time(10, 30)),
+        (time(10, 15), time(11, 0)),
+    )
+    assert remaining_after(*slots) == 480 - 120
+
+
+def test_remaining_minutes_goes_negative_when_overbooked():
+    assert remaining_after((time(9, 0), time(18, 0)), available=60) == 60 - 540
+
+
+def test_remaining_minutes_counts_simultaneous_tasks_for_two_pets_once():
+    assert remaining_after((time(9, 0), time(9, 30)), (time(9, 0), time(9, 30)), pets=2) == 450
+
+
+def test_remaining_minutes_ignores_tasks_on_other_dates():
+    assert remaining_after((time(9, 0), time(9, 30)), day=date(2026, 10, 12)) == 480
+
+
+def test_busy_minutes_handles_unsorted_tasks():
+    tasks = [
+        make_task(start_time=time(10, 15), end_time=time(11, 0)),
+        make_task(start_time=time(9, 0), end_time=time(10, 0)),
+        make_task(start_time=time(9, 30), end_time=time(10, 30)),
+    ]
+
+    assert Scheduler._busy_minutes(tasks) == 120
 
 
 def test_adding_task_increases_pet_task_count():

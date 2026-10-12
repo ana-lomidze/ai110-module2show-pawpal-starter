@@ -334,7 +334,6 @@ class Owner:
         self,
         name: str,
         daily_available_minutes: int = 480,
-        preferences: Optional[List[str]] = None,
         _token: object = None,
     ) -> None:
         """Create an owner; only allowed through PawPal.add_owner()."""
@@ -343,7 +342,6 @@ class Owner:
         self.name: str = name
         self.pets: List[Pet] = []
         self.daily_available_minutes: int = daily_available_minutes
-        self.preferences: List[str] = preferences if preferences is not None else []
 
     def add_pet(self, name: str, pet_type: str, age: int) -> Pet:
         """Create a pet for this owner after validating its details, and return it."""
@@ -426,10 +424,13 @@ class Scheduler:
         pet_name: Optional[str] = None,
         status: Optional[str] = None,
         category: Optional[str] = None,
+        longer_than: Optional[float] = None,
+        at_most: Optional[float] = None,
     ) -> List[Task]:
-        """Return the day's tasks in time order, filtered by pet name, status and category.
+        """Return the day's tasks in time order, filtered by pet name, status, category and length.
 
         status is "done", "pending" or None; completion is checked for this date only.
+        longer_than (exclusive) and at_most (inclusive) bound the duration in minutes.
         """
         if status not in (None, "done", "pending"):
             raise ValueError("Status must be 'done', 'pending' or None")
@@ -438,6 +439,10 @@ class Scheduler:
             if pet_name is not None and t.pet.name != pet_name:
                 continue
             if category is not None and t.category != category:
+                continue
+            if longer_than is not None and t.get_duration() <= longer_than:
+                continue
+            if at_most is not None and t.get_duration() > at_most:
                 continue
             if status is not None and t.is_complete(date) != (status == "done"):
                 continue

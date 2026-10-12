@@ -7,7 +7,7 @@
 Three Core Actions:
 1. Add owner and Pet information
 2. Add/Edit tasks (duriation, name of task, category, priority)
-3. Scheduling: Display a daily schedule/plan based on constraints (filters) and priorities.
+3. Scheduling: Display a daily schedule/plan based on constraints (filters).
 
 
 Classes Used:
@@ -36,8 +36,7 @@ After checking the project requirements, I also added add_task, edit_task, remov
 
 **b. Tradeoffs**
 
-- Describe one tradeoff your scheduler makes.
-- Why is that tradeoff reasonable for this scenario?
+ Editing only the current occurance of reoccurring tasks creates the next occurance right away. This is so that changes doesn't carry over into the rest of the occurances since the reoccurance just 'copies' the current instance of the task.
 
 ---
 

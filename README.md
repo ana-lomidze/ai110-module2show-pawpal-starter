@@ -119,10 +119,12 @@ Sample test output:
 
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | `Scheduler.sort_tasks` | by `"time"`, `"priority"` (highest first) or `"duration"` (shortest first) |
-| Filtering | `Schedule.filter_tasks` | by name, category, priority, max duration, completion and date |
-| Conflict handling | `Scheduler.find_conflicts` | overlapping time slots, across all pets |
-| Recurring tasks | `Task.occurs_on`, `Task.mark_complete` | `daily`, `weekly` or `monthly`, with per-date completion |
+| Task sorting | `Scheduler.sort_tasks`, `Scheduler.daily_plan` | by `"time"`, `"priority"` (highest first) or `"duration"` (shortest first); the daily plan is in time order across all pets |
+| Filtering | `Scheduler.filter_tasks` | one day's tasks across all pets, by pet name, status (`"done"` or `"pending"` for that date), category and length (`longer_than` / `at_most` minutes). The app offers pet, status and length dropdowns. `Schedule.filter_tasks` still filters a single pet's tasks by name, category, priority, max duration, completion and date |
+| Conflict handling | `Scheduler.find_conflicts`, `Scheduler.conflict_warnings`, `Scheduler.warnings_for` | finds overlapping tasks in one pass over the day (back-to-back is not an overlap) and returns warning messages instead of raising. Same pet, or different pets with different categories: `Conflict`. Different pets, same category: a softer `Heads-up`, since both can be done together (`Scheduler.is_shared_time`). `warnings_for` checks a single task, e.g. right after it is added or edited |
+| Recurring tasks | `Task.next_date`, `Task.mark_complete`, `Task.spawn_next`, `Schedule.complete_task` | `daily` (+1 day), `weekly` (+7 days) or `monthly` (every 30 days). Each task is one dated occurrence; completing it creates the next one automatically, and never creates it twice. Completion is per date |
+| Editing and deleting | `Schedule.edit_task`, `edit_occurrence`, `edit_series`, `skip_task`, `remove_series` | recurring tasks can be changed or deleted for **this occurrence only** or **this and all future occurrences** (occurrences are linked by a `series_id`). Changing a completed task's date or times makes it pending again |
+| Time left in the day | `Scheduler.remaining_minutes` | available minutes minus scheduled minutes, with overlapping time counted once, so two pets fed together use 30 minutes, not 60. Negative means overbooked |
 
 ## 📸 Demo Walkthrough
 

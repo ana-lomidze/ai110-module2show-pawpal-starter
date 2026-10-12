@@ -220,11 +220,21 @@ pet_options = ["All pets"] + list(pets_by_name)
 if st.session_state.get("pet_filter", "All pets") not in pet_options:
     st.session_state.pet_filter = "All pets"  # the filtered pet no longer exists under that name
 
-filter_col1, filter_col2 = st.columns(2)
+# Duration choices: label -> (longer_than, at_most) in minutes
+DURATION_CHOICES = {
+    "Any length": (None, None),
+    "Short (up to 30 min)": (None, 30),
+    "Medium (30-60 min)": (30, 60),
+    "Long (over 60 min)": (60, None),
+}
+
+filter_col1, filter_col2, filter_col3 = st.columns(3)
 with filter_col1:
     pet_choice = st.selectbox("Show pet", pet_options, key="pet_filter")
 with filter_col2:
     status_choice = st.selectbox("Show status", ["All", "Pending", "Done"], key="status_filter")
+with filter_col3:
+    duration_choice = st.selectbox("Show length", list(DURATION_CHOICES), key="duration_filter")
 
 
 def complete_task(task: Task, on: date) -> None:
@@ -357,6 +367,8 @@ plan = scheduler.filter_tasks(
     plan_date,
     pet_name=None if pet_choice == "All pets" else pet_choice,
     status=None if status_choice == "All" else status_choice.lower(),
+    longer_than=DURATION_CHOICES[duration_choice][0],
+    at_most=DURATION_CHOICES[duration_choice][1],
 )
 
 if not day_plan:
